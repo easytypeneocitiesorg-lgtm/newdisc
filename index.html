@@ -1,200 +1,450 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>The New Discord</title>
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
-  <link rel="stylesheet" href="style.css">
-  <style>
-    /* Inline styles for the block screen to avoid changing style.css */
-    #blocked-screen {
-      background: #000;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 9999;
-    }
-    .blocked-box {
-      background: #111;
-      padding: 40px;
-      border: 2px solid red;
-      border-radius: 8px;
-      text-align: center;
-      max-width: 500px;
-      width: 90%;
-    }
-    .blocked-box h1 {
-      color: red;
-      margin-bottom: 15px;
-      font-size: 24px;
-      text-transform: lowercase;
-    }
-    .blocked-box p {
-      color: #ccc;
-      margin-bottom: 20px;
-      font-size: 14px;
-      text-transform: lowercase;
-    }
-    .blocked-box a {
-      color: #ff4444;
-      text-decoration: underline;
-    }
-    .blocked-box a:hover {
-      color: #ff6666;
-    }
-    .blocked-box input {
-      padding: 10px;
-      font-size: 16px;
-      width: 80%;
-      margin-bottom: 15px;
-      border: 1px solid #333;
-      border-radius: 4px;
-      background: #222;
-      color: white;
-    }
-    .blocked-box button {
-      background: red;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      font-size: 16px;
-      cursor: pointer;
-      border-radius: 4px;
-      font-weight: bold;
-    }
-    .blocked-box button:hover {
-      background: darkred;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>The New Discord</title>
+
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
-  <!-- Auth Screen -->
-  <div id="auth-screen" class="screen">
-    <div class="auth-box">
-      <h1>The New Discord</h1>
-      <p>its the new discord</p>
-      
-      <form id="auth-form">
-        <div id="login-fields">
-          <input type="text" id="username" placeholder="Username" required autocomplete="off">
-          <input type="password" id="password" placeholder="Password" required>
+    <!-- AUTH SCREEN -->
+    <div id="auth-screen" class="screen">
+
+        <div class="auth-box">
+
+            <h1>The New Discord</h1>
+            <p>its the new discord</p>
+
+            <form id="auth-form">
+
+                <div id="login-fields">
+
+                    <input
+                        type="text"
+                        id="username"
+                        placeholder="Username"
+                        required
+                        autocomplete="off"
+                    >
+
+                    <input
+                        type="password"
+                        id="password"
+                        placeholder="Password"
+                        required
+                    >
+
+                </div>
+
+                <div id="age-group" class="hidden">
+
+                    <label for="age-select" class="age-label">
+                        Select your age:
+                    </label>
+
+                    <select id="age-select">
+                        <option value="13-14">13-14</option>
+                        <option value="15-16">15-16</option>
+                        <option value="17-18">17-18</option>
+                        <option value="19-20">19-20</option>
+                        <option value="21+">21+</option>
+                    </select>
+
+                </div>
+
+                <div class="auth-buttons">
+
+                    <button
+                        type="button"
+                        id="login-btn"
+                    >
+                        Log In
+                    </button>
+
+                    <button
+                        type="button"
+                        id="signup-btn"
+                        class="secondary"
+                    >
+                        Create Account
+                    </button>
+
+                </div>
+
+                <p id="auth-error" class="error-msg"></p>
+
+            </form>
+
         </div>
-        
-        <div id="age-group" class="hidden">
-          <label style="color: var(--ob-blue); font-weight: bold; margin-bottom: 5px; display:block;">Select your age:</label>
-          <select id="age-select">
-            <option value="13-14">13-14</option>
-            <option value="15-16">15-16</option>
-            <option value="17-18">17-18</option>
-            <option value="19-20">19-20</option>
-            <option value="21+">21+</option>
-          </select>
-        </div>
-        
-        <div class="auth-buttons">
-          <button type="button" id="login-btn">Log In</button>
-          <button type="button" id="signup-btn" class="secondary">Create Account</button>
-        </div>
-        <p id="auth-error" class="error-msg"></p>
-      </form>
+
     </div>
-  </div>
 
-  <!-- Blocked Screen -->
-  <div id="blocked-screen" class="screen hidden">
-    <div class="blocked-box">
-      <h1>you have been blocked from this site by a staff member</h1>
-      <p>
-        you can apply to get an unblock code at <a href="https://discord.gg/hzKHYcvKtQ" target="_blank">https://discord.gg/hzKHYcvKtQ</a>
-      </p>
-      <input type="text" id="unblock-code-input" placeholder="Enter unblock code..." autocomplete="off">
-      <br>
-      <button id="unblock-btn">Unblock</button>
+
+    <!-- BLOCKED SCREEN -->
+    <div id="blocked-screen" class="screen hidden">
+
+        <div class="blocked-box">
+
+            <h1>
+                You have been blocked from this site
+                by a staff member
+            </h1>
+
+            <p>
+                You can apply to get an unblock code at
+                <a
+                    href="https://discord.gg/hzKHYcvKtQ"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    the Discord server
+                </a>.
+            </p>
+
+            <input
+                type="text"
+                id="unblock-code-input"
+                placeholder="Enter unblock code..."
+                autocomplete="off"
+            >
+
+            <br>
+
+            <button id="unblock-btn">
+                Unblock
+            </button>
+
+        </div>
+
     </div>
-  </div>
 
-  <!-- Profile Edit Modal -->
-  <div id="profile-modal" class="modal hidden">
-    <div class="modal-content">
-      <h3 style="color: var(--ob-blue); margin-bottom: 10px;">Edit Profile</h3>
-      <input type="text" id="display-name-input" placeholder="Display Name (Optional)" maxlength="20">
-      <textarea id="bio-input" placeholder="Write a short bio..." rows="3" maxlength="100"></textarea>
-      <div class="auth-buttons" style="margin-top: 10px;">
-        <button id="save-profile-btn">Save</button>
-        <button id="cancel-profile-btn" class="secondary">Cancel</button>
-      </div>
+
+    <!-- PROFILE EDIT MODAL -->
+    <div id="profile-modal" class="modal hidden">
+
+        <div class="modal-content">
+
+            <h3>
+                Edit Profile
+            </h3>
+
+            <input
+                type="text"
+                id="display-name-input"
+                placeholder="Display Name (Optional)"
+                maxlength="20"
+            >
+
+            <textarea
+                id="bio-input"
+                placeholder="Write a short bio..."
+                rows="3"
+                maxlength="100"
+            ></textarea>
+
+            <div class="auth-buttons modal-buttons">
+
+                <button
+                    id="save-profile-btn"
+                    type="button"
+                >
+                    Save
+                </button>
+
+                <button
+                    id="cancel-profile-btn"
+                    class="secondary"
+                    type="button"
+                >
+                    Cancel
+                </button>
+
+            </div>
+
+        </div>
+
     </div>
-  </div>
 
-  <!-- Chat Screen -->
-  <div id="chat-screen" class="screen hidden">
-    <div class="sidebar">
-      <div>
-        <h2>The New Discord</h2>
-        <div class="channels">
-          <div class="channel active" data-channel="main"># main-chat</div>
-          <div class="channel" data-channel="staff"># staff-chat 🛡️</div>
+
+    <!-- CHAT SCREEN -->
+    <div id="chat-screen" class="screen hidden">
+
+        <!-- SIDEBAR -->
+        <div class="sidebar">
+
+            <div class="sidebar-content">
+
+                <h2>
+                    The New Discord
+                </h2>
+
+                <div class="channels">
+
+                    <div
+                        class="channel active"
+                        data-channel="main"
+                    >
+                        <span class="channel-icon">#</span>
+                        <span>main-chat</span>
+                    </div>
+
+                    <div
+                        class="channel"
+                        data-channel="staff"
+                    >
+                        <span class="channel-icon">#</span>
+                        <span>staff-chat</span>
+                        <span class="channel-badge">🛡️</span>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- USER PANEL -->
+            <div class="user-panel">
+
+                <div class="user-profile-wrapper">
+
+                    <label
+                        for="pfp-upload"
+                        class="pfp-label"
+                        title="Click to change profile picture"
+                    >
+
+                        <img
+                            id="current-pfp"
+                            src=""
+                            alt="Profile"
+                        >
+
+                        <div class="pfp-overlay">
+                            Edit
+                        </div>
+
+                    </label>
+
+                    <input
+                        type="file"
+                        id="pfp-upload"
+                        accept="image/*"
+                        class="hidden"
+                    >
+
+                    <div class="user-info">
+
+                        <span id="current-user">
+                            User
+                        </span>
+
+                        <span class="online-status">
+                            Online
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <div class="user-buttons">
+
+                    <button
+                        id="edit-profile-btn"
+                        type="button"
+                        title="Edit Profile"
+                    >
+                        <span class="button-icon">⚙</span>
+                        <span>Profile</span>
+                    </button>
+
+                    <button
+                        id="logout-btn"
+                        type="button"
+                        title="Log Out"
+                    >
+                        <span class="button-icon">↪</span>
+                        <span>Logout</span>
+                    </button>
+
+                </div>
+
+            </div>
+
         </div>
-      </div>
-      
-      <div class="user-panel">
-        <div class="user-profile-wrapper">
-          <label for="pfp-upload" class="pfp-label" title="Click to change profile picture">
-            <img id="current-pfp" src="" alt="Profile">
-            <div class="pfp-overlay">Edit</div>
-          </label>
-          <input type="file" id="pfp-upload" accept="image/*" class="hidden">
-          <span id="current-user">User</span>
+
+
+        <!-- CHAT AREA -->
+        <div class="chat-area">
+
+            <!-- CHANNEL HEADER -->
+            <div class="chat-header">
+
+                <span class="channel-hash">
+                    #
+                </span>
+
+                <h3 id="current-channel-title">
+                    main-chat
+                </h3>
+
+            </div>
+
+
+            <!-- MESSAGES -->
+            <div
+                id="messages-container"
+                class="messages-container"
+            >
+                <!-- Messages load here -->
+            </div>
+
+
+            <!-- MESSAGE INPUT -->
+            <div class="input-container">
+
+                <!-- REPLY BANNER -->
+                <div
+                    id="reply-banner"
+                    class="hidden"
+                >
+
+                    <span>
+
+                        Replying to
+
+                        <strong id="reply-to-name"></strong>
+
+                        <span class="reply-colon">:</span>
+
+                        <span id="reply-to-text"></span>
+
+                    </span>
+
+                    <button
+                        type="button"
+                        id="cancel-reply-btn"
+                        title="Cancel reply"
+                    >
+                        ×
+                    </button>
+
+                </div>
+
+
+                <!-- TYPING INDICATOR -->
+                <div
+                    id="typing-indicator"
+                    class="typing-indicator hidden"
+                >
+                    Someone is typing...
+                </div>
+
+
+                <!-- FILE PREVIEW -->
+                <div
+                    id="file-preview"
+                    class="hidden"
+                >
+
+                    <span id="file-preview-name">
+                        filename.jpg
+                    </span>
+
+                    <button
+                        type="button"
+                        id="remove-file-btn"
+                        title="Remove attachment"
+                    >
+                        ×
+                    </button>
+
+                </div>
+
+
+                <!-- MESSAGE FORM -->
+                <form
+                    id="message-form"
+                    class="message-input-area"
+                >
+
+                    <label
+                        for="file-upload"
+                        class="file-label"
+                        title="Attach a file (Max 5MB)"
+                    >
+                        +
+                    </label>
+
+                    <input
+                        type="file"
+                        id="file-upload"
+                        class="hidden"
+                    >
+
+                    <input
+                        type="text"
+                        id="message-input"
+                        placeholder="Message #main-chat"
+                        autocomplete="off"
+                    >
+
+                    <button
+                        type="submit"
+                        id="send-message-btn"
+                    >
+                        Send
+                    </button>
+
+                </form>
+
+                <p
+                    id="chat-error"
+                    class="error-msg hidden"
+                ></p>
+
+            </div>
+
         </div>
-        <div style="display: flex; gap: 5px;">
-          <button id="edit-profile-btn" style="background: var(--ob-yellow); color: var(--ob-blue); flex: 1; padding: 6px; font-size: 12px;">⚙️ Profile</button>
-          <button id="logout-btn" style="flex: 1; padding: 6px; font-size: 12px;">Logout</button>
-        </div>
-      </div>
+
     </div>
-    
-    <div class="chat-area">
-      <div class="chat-header">
-        <h3 id="current-channel-title"># main-chat</h3>
-      </div>
-      
-      <div id="messages-container" class="messages-container">
-        <!-- Messages load here -->
-      </div>
-      
-      <div class="input-container">
-        <!-- Reply Banner -->
-        <div id="reply-banner" class="hidden">
-          <span>Replying to <strong id="reply-to-name"></strong>: <span id="reply-to-text"></span></span>
-          <button type="button" id="cancel-reply-btn">X</button>
-        </div>
 
-        <div id="typing-indicator" class="typing-indicator hidden">Someone is typing...</div>
-        
-        <div id="file-preview" class="hidden">
-          <span id="file-preview-name">filename.jpg</span>
-          <button type="button" id="remove-file-btn">X</button>
-        </div>
-        
-        <form id="message-form" class="message-input-area">
-          <label for="file-upload" class="file-label" title="Attach a file (Max 5MB)">+</label>
-          <input type="file" id="file-upload" class="hidden">
-          <input type="text" id="message-input" placeholder="Message the chat..." autocomplete="off">
-          <button type="submit">Send</button>
-        </form>
-        <p id="chat-error" class="error-msg hidden"></p>
-      </div>
+
+    <!-- GLOBAL EVENT OVERLAY -->
+    <div
+        id="cheddar-overlay"
+        class="hidden"
+    >
+
+        <img
+            src="cheddarandbbqwavy.png"
+            alt="Cheddar and BBQ Wavy"
+        >
+
     </div>
-  </div>
 
-  <!-- Global Event Overlay -->
-  <div id="cheddar-overlay" class="hidden">
-    <img src="cheddarandbbqwavy.png" alt="Cheddar and BBQ Wavy">
-  </div>
-  <audio id="cheddar-audio" src="cheddarandbbqwavy.mp3" loop></audio>
 
-  <script type="module" src="app.js"></script>
+    <audio
+        id="cheddar-audio"
+        src="cheddarandbbqwavy.mp3"
+        loop
+    ></audio>
+
+
+    <!-- APPLICATION JAVASCRIPT -->
+    <script
+        type="module"
+        src="app.js"
+    ></script>
+
 </body>
+
 </html>
+```
