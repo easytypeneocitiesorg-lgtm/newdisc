@@ -4,14 +4,13 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBDo6UZCR44x2o0jCHilqI0_LimNuOrTso",
-  authDomain: "oldbayhuffers.firebaseapp.com",
-  databaseURL: "https://oldbayhuffers-default-rtdb.firebaseio.com",
-  projectId: "oldbayhuffers",
-  storageBucket: "oldbayhuffers.firebasestorage.app",
-  messagingSenderId: "426339148612",
-  appId: "1:426339148612:web:5cd0d527caa23b32016d11",
-  measurementId: "G-DFHQ1WG2WP"
+  apiKey: "AIzaSyAyR3YYB0BP9wNOsBc7Kcs57KbJcbTpRTo",
+  authDomain: "thenewdiscisdead.firebaseapp.com",
+  projectId: "thenewdiscisdead",
+  storageBucket: "thenewdiscisdead.firebasestorage.app",
+  messagingSenderId: "1031346102402",
+  appId: "1:1031346102402:web:7fae429231e82fa78d149b",
+  measurementId: "G-Q1K6WTG06F"
 };
 
 const app = initializeApp(firebaseConfig);
