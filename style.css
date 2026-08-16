@@ -67,7 +67,7 @@ button:hover { opacity: 0.9; }
 .messages-container { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
 
 /* Messages */
-.message { display: flex; gap: 16px; background: transparent; padding: 4px 16px; border-radius: 0; box-shadow: none; margin-top: 10px; }
+.message { display: flex; gap: 16px; background: transparent; padding: 4px 16px; border-radius: 0; box-shadow: none; margin-top: 10px; position: relative; }
 .message:hover { background-color: rgba(0, 0, 0, 0.05); }
 .msg-pfp { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: #202225; border: none; }
 .msg-content { flex: 1; min-width: 0; }
@@ -113,7 +113,7 @@ textarea:focus { box-shadow: 0 0 0 2px var(--discord-accent); }
 .replied-author { font-weight: 600; color: var(--discord-header); margin-right: 5px; }
 .replied-text { font-style: normal; }
 
-.message-actions { margin-left: auto; opacity: 0; transition: opacity 0.2s; display: flex; align-items: center; gap: 4px; background: var(--discord-secondary-bg); padding: 2px; border-radius: 4px; position: absolute; right: 16px; top: -10px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+.message-actions { margin-left: auto; opacity: 0; transition: opacity 0.2s; display: flex; align-items: center; gap: 4px; background: var(--discord-secondary-bg); padding: 4px 8px; border-radius: 4px; position: absolute; right: 16px; top: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); z-index: 5; }
 .message:hover .message-actions { opacity: 1; }
 .reply-btn { background: transparent; color: var(--discord-text-normal); border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; }
 .reply-btn:hover { background: var(--discord-hover-bg); }
