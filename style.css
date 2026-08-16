@@ -11,6 +11,7 @@
   --discord-accent: #5865f2;
   --discord-accent-hover: #4752c4;
   --discord-danger: #ed4245;
+  --discord-success: #23a55a;
   --discord-border: #1f2023;
 }
 
@@ -42,13 +43,28 @@ button:hover { opacity: 0.9; }
 .sidebar { width: 240px; background-color: var(--discord-secondary-bg); color: var(--discord-text-normal); display: flex; flex-direction: column; border-right: 1px solid var(--discord-border); justify-content: space-between; }
 .sidebar h2 { padding: 16px; background-color: transparent; color: var(--discord-header); border-bottom: 1px solid var(--discord-border); text-align: left; text-transform: none; font-size: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
 
-.channels { padding: 12px 8px; }
-.channel { padding: 8px 10px; border-radius: 4px; color: var(--discord-text-muted); cursor: pointer; margin-bottom: 2px; font-weight: 500; font-size: 14px; }
+.channels { padding: 12px 8px; overflow-y: auto; flex: 1; }
+.channel-category { font-size: 12px; font-weight: 700; color: var(--discord-text-muted); padding: 0 8px 4px 8px; letter-spacing: 0.025em; }
+.channel { padding: 8px 10px; border-radius: 4px; color: var(--discord-text-muted); cursor: pointer; margin-bottom: 2px; font-weight: 500; font-size: 14px; display: flex; align-items: center; gap: 6px; }
 .channel:hover { background-color: var(--discord-hover-bg); color: var(--discord-text-normal); }
 .channel.active { background-color: var(--discord-active-bg); color: var(--discord-header); }
 
-/* User Panel & PFP */
+/* VC Connected Users List inside Sidebar */
+.vc-users-container { padding-left: 16px; display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+.vc-user-item { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 4px; font-size: 13px; color: var(--discord-text-normal); }
+.vc-user-avatar { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; }
+.vc-speaking { box-shadow: 0 0 0 2px var(--discord-success); }
+
+/* User Panel & VC Status Bar */
 .user-panel { background-color: var(--discord-tertiary-bg); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--discord-border); }
+.vc-status-bar { background-color: var(--discord-secondary-bg); padding: 8px; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; border-left: 3px solid var(--discord-success); margin-bottom: 4px; }
+.vc-status-info { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.vc-connected-icon { font-size: 14px; color: var(--discord-success); }
+.vc-status-text { font-weight: 600; color: var(--discord-success); line-height: 1.1; }
+.vc-room-name { color: var(--discord-text-muted); font-size: 11px; }
+#vc-disconnect-btn { background: transparent; color: var(--discord-danger); border: none; font-size: 11px; padding: 2px 6px; cursor: pointer; font-weight: 600; border-radius: 3px; flex: unset; }
+#vc-disconnect-btn:hover { background: rgba(237, 66, 69, 0.1); }
+
 .user-profile-wrapper { display: flex; align-items: center; gap: 8px; }
 .pfp-label { position: relative; cursor: pointer; width: 32px; height: 32px; border-radius: 50%; overflow: hidden; border: none; flex-shrink: 0; }
 .pfp-label img { width: 100%; height: 100%; object-fit: cover; }
