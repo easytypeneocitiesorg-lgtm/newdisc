@@ -74,7 +74,7 @@
   <div id="auth-screen" class="screen">
     <div class="auth-box">
       <h1>The New Discord</h1>
-      <p>Welcome! Let's get you signed in.</p>
+      <p>Welcome back! Let's get you signed in.</p>
       
       <form id="auth-form">
         <div id="login-fields">
@@ -107,7 +107,7 @@
     <div class="blocked-box">
       <h1>you have been blocked from this site by a staff member</h1>
       <p>
-        you can apply to get an unblock code at <a href="https://discord.gg/hzKHYcvKtQ" target="_blank">https://discord.gg/hzKHYcvKtQ</a>
+        you can apply to get an unblock code at <a href="https://discord.gg/wZNGASwP3Y" target="_blank">https://discord.gg/wZNGASwP3Y</a>
       </p>
       <input type="text" id="unblock-code-input" placeholder="Enter unblock code..." autocomplete="off">
       <br>
@@ -134,12 +134,30 @@
       <div>
         <h2>The New Discord</h2>
         <div class="channels">
+          <div class="channel-category">TEXT CHANNELS</div>
           <div class="channel active" data-channel="main"># main-chat</div>
           <div class="channel" data-channel="staff"># staff-chat 🛡️</div>
+          
+          <div class="channel-category" style="margin-top: 15px;">VOICE CHANNELS</div>
+          <div class="channel vc-channel" data-channel="general-vc">🔊 General VC</div>
+          <div id="vc-users-list" class="vc-users-container hidden">
+            <!-- Connected VC users populate here -->
+          </div>
         </div>
       </div>
       
       <div class="user-panel">
+        <div id="vc-connected-bar" class="vc-status-bar hidden">
+          <div class="vc-status-info">
+            <span class="vc-connected-icon">🔊</span>
+            <div>
+              <div class="vc-status-text">Voice Connected</div>
+              <div id="vc-current-room" class="vc-room-name">General VC</div>
+            </div>
+          </div>
+          <button id="vc-disconnect-btn" title="Disconnect">Disconnect</button>
+        </div>
+
         <div class="user-profile-wrapper">
           <label for="pfp-upload" class="pfp-label" title="Click to change profile picture">
             <img id="current-pfp" src="" alt="Profile">
