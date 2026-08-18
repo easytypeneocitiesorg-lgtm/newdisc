@@ -329,36 +329,49 @@ document.getElementById('admin-revoke-btn').addEventListener('click', async () =
   alert(`Staff privileges revoked from @${adminTargetUser}.`);
 });
 
-// Owner Tools
+// Owner Tools (Active & Used Code Separator)
 async function loadGeneratedCodes() {
   const codesSelect = document.getElementById('generated-codes-select');
-  codesSelect.innerHTML = '<option value="">-- View Generated Codes --</option>';
+  codesSelect.innerHTML = '<option value="">-- Active & Used Codes --</option>';
   
-  const staffSnap = await get(child(dbRef, 'generated_codes/staff'));
-  if(staffSnap.exists()) {
-    staffSnap.forEach(c => {
-      codesSelect.innerHTML += `<option>[STAFF] ${c.key} - Used by: ${c.val().usedBy || 'UNUSED'}</option>`;
+  // Load Active Staff Codes
+  const activeStaffSnap = await get(child(dbRef, 'generated_codes/active/staff'));
+  if(activeStaffSnap.exists()) {
+    activeStaffSnap.forEach(c => {
+      codesSelect.innerHTML += `<option>[ACTIVE STAFF] ${c.key}</option>`;
     });
   }
   
-  const unblockSnap = await get(child(dbRef, 'generated_codes/unblock'));
-  if(unblockSnap.exists()) {
-    unblockSnap.forEach(c => {
-      codesSelect.innerHTML += `<option>[UNBLOCK] ${c.key} - Used by: ${c.val().usedBy || 'UNUSED'}</option>`;
+  // Load Active Unblock Codes
+  const activeUnblockSnap = await get(child(dbRef, 'generated_codes/active/unblock'));
+  if(activeUnblockSnap.exists()) {
+    activeUnblockSnap.forEach(c => {
+      codesSelect.innerHTML += `<option>[ACTIVE UNBLOCK] ${c.key}</option>`;
+    });
+  }
+
+  // Load Used Codes History
+  const usedSnap = await get(child(dbRef, 'generated_codes/used'));
+  if(usedSnap.exists()) {
+    usedSnap.forEach(c => {
+      const data = c.val();
+      codesSelect.innerHTML += `<option>[USED (${data.type.toUpperCase()})] ${c.key} - By: @${data.usedBy}</option>`;
     });
   }
 }
 
 document.getElementById('gen-staff-code-btn').addEventListener('click', async () => {
   const code = 'staffaccess_' + Math.random().toString(36).substring(2, 10);
-  await set(ref(db, `generated_codes/staff/${code}`), { usedBy: null });
-  alert(`Generated: ${code}`); loadGeneratedCodes();
+  await set(ref(db, `generated_codes/active/staff/${code}`), true);
+  alert(`Generated: ${code}`); 
+  loadGeneratedCodes();
 });
 
 document.getElementById('gen-unblock-code-btn').addEventListener('click', async () => {
   const code = 'unblock_' + Math.random().toString(36).substring(2, 10);
-  await set(ref(db, `generated_codes/unblock/${code}`), { usedBy: null });
-  alert(`Generated: ${code}`); loadGeneratedCodes();
+  await set(ref(db, `generated_codes/active/unblock/${code}`), true);
+  alert(`Generated: ${code}`); 
+  loadGeneratedCodes();
 });
 
 // DM Blocking (For everyone)
@@ -490,7 +503,7 @@ function loadUserDMs() {
   });
 }
 
-// Channel Switching & Code Redemptions (FIXED STAFF CODE LOGIC)
+// Channel Switching & Staff Code Redemption (Moves code from active to used)
 document.querySelectorAll('.channel[data-type="text"]').forEach(el => {
   el.addEventListener('click', async () => {
     const targetChannel = el.dataset.channel;
@@ -500,18 +513,16 @@ document.querySelectorAll('.channel[data-type="text"]').forEach(el => {
       const code = prompt("Enter a staff code:");
       if(!code) return;
       try {
-        const claimCheck = await get(child(dbRef, `generated_codes/staff/${code}`));
+        const claimCheck = await get(child(dbRef, `generated_codes/active/staff/${code}`));
         if(!claimCheck.exists()) return alert("Invalid staff code.");
         
-        const codeData = claimCheck.val();
-        if(codeData.usedBy && codeData.usedBy !== currentActiveUser) {
-          return alert("This code has already been used!");
-        }
+        // Remove from active & register under used codes
+        const updates = {};
+        updates[`generated_codes/active/staff/${code}`] = null;
+        updates[`generated_codes/used/${code}`] = { usedBy: currentActiveUser, type: 'staff', usedAt: serverTimestamp() };
+        updates[`users/${currentActiveUser}/isStaff`] = true;
         
-        // Mark code as used and grant staff role
-        await update(ref(db, `generated_codes/staff/${code}`), { usedBy: currentActiveUser });
-        await update(ref(db, `users/${currentActiveUser}`), { isStaff: true });
-        
+        await update(ref(db), updates);
         alert("Access Granted! You are now Staff.");
       } catch(err) { 
         console.error(err);
@@ -522,23 +533,22 @@ document.querySelectorAll('.channel[data-type="text"]').forEach(el => {
   });
 });
 
-// FIXED UNBLOCK LOGIC
+// Unblock Code Redemption (Moves code from active to used)
 document.getElementById('unblock-btn').addEventListener('click', async () => {
   const code = document.getElementById('unblock-code-input').value.trim();
   if (!code) return alert("Please enter an unblock code.");
   
   try {
-    const claimCheck = await get(child(dbRef, `generated_codes/unblock/${code}`));
+    const claimCheck = await get(child(dbRef, `generated_codes/active/unblock/${code}`));
     if(!claimCheck.exists()) return alert("Invalid unblock code.");
     
-    const codeData = claimCheck.val();
-    if(codeData.usedBy && codeData.usedBy !== currentActiveUser) {
-      return alert("This code has already been used!");
-    }
+    // Remove from active & register under used codes
+    const updates = {};
+    updates[`generated_codes/active/unblock/${code}`] = null;
+    updates[`generated_codes/used/${code}`] = { usedBy: currentActiveUser, type: 'unblock', usedAt: serverTimestamp() };
+    updates[`blocked_users/${currentActiveUser}`] = null;
     
-    // Mark code as used and remove block status
-    await update(ref(db, `generated_codes/unblock/${code}`), { usedBy: currentActiveUser });
-    await remove(ref(db, `blocked_users/${currentActiveUser}`));
+    await update(ref(db), updates);
     
     document.getElementById('unblock-code-input').value = "";
     alert("Successfully unblocked! Welcome back.");
