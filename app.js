@@ -130,6 +130,7 @@ function updateUIAfterLogin(username) {
 const savedSession = localStorage.getItem('obh_session');
 if (savedSession) logUserIn(savedSession);
 
+// LOGIN LOGIC
 document.getElementById('login-btn').addEventListener('click', async (e) => {
   e.preventDefault();
   authError.textContent = 'Checking...';
@@ -143,6 +144,50 @@ document.getElementById('login-btn').addEventListener('click', async (e) => {
       localStorage.setItem('obh_session', username); authError.textContent = ''; logUserIn(username);
     } else { authError.textContent = "Incorrect username or password."; }
   } catch (error) { authError.textContent = "Database error."; }
+});
+
+// SIGNUP LOGIC - RESTORED
+document.getElementById('signup-btn').addEventListener('click', async (e) => {
+  e.preventDefault();
+  const username = usernameInput.value.trim().toLowerCase();
+  const password = passwordInput.value;
+  const ageGroup = document.getElementById('age-group');
+  const loginFields = document.getElementById('login-fields');
+  const loginBtn = document.getElementById('login-btn');
+  const signupBtn = document.getElementById('signup-btn');
+
+  if (ageGroup.classList.contains('hidden')) {
+    if (username.length < 3 || password.length < 4) {
+      authError.textContent = "Username > 3 chars, Password > 4 chars.";
+      return;
+    }
+    authError.textContent = "Checking username...";
+    try {
+      const snapshot = await get(child(dbRef, `users/${username}`));
+      if (snapshot.exists()) return (authError.textContent = "Username taken.");
+      authError.textContent = "";
+      loginFields.classList.add('hidden');
+      loginBtn.classList.add('hidden');
+      ageGroup.classList.remove('hidden');
+      signupBtn.textContent = "Complete Account";
+    } catch (e) { authError.textContent = "Database error."; }
+  } else {
+    authError.textContent = "Creating account...";
+    const age = document.getElementById('age-select').value;
+    try {
+      await set(ref(db, `users/${username}`), { 
+        password, pfp: DEFAULT_PFP, age, isStaff: false, displayName: "", bio: "", createdAt: serverTimestamp() 
+      });
+      localStorage.setItem('obh_session', username);
+      authError.textContent = '';
+      logUserIn(username);
+      
+      loginFields.classList.remove('hidden');
+      loginBtn.classList.remove('hidden');
+      ageGroup.classList.add('hidden');
+      signupBtn.textContent = "Create Account";
+    } catch (error) { authError.textContent = "Database error."; }
+  }
 });
 
 document.getElementById('logout-btn').addEventListener('click', () => {
