@@ -38,6 +38,11 @@ const filePreviewName = document.getElementById('file-preview-name');
 const chatError = document.getElementById('chat-error');
 const typingIndicator = document.getElementById('typing-indicator');
 
+// DM Search Elements
+const dmSearchInput = document.getElementById('dm-search-input');
+const dmSearchResults = document.getElementById('dm-search-results');
+const dmChannelsList = document.getElementById('dm-channels-list');
+
 // Unblock Elements
 const unblockCodeInput = document.getElementById('unblock-code-input');
 const unblockBtn = document.getElementById('unblock-btn');
@@ -74,8 +79,20 @@ let currentUserData = {};
 let lastMessageTime = 0;
 let attachedFileData = null;
 let currentChannel = "main";
+let currentChannelType = "text"; // "text" or "dm"
 let typingTimeout = null;
 let currentReplyContext = null;
+
+// Request Desktop Notifications Permission
+if ("Notification" in window && Notification.permission !== "granted") {
+  Notification.requestPermission();
+}
+
+function showDesktopNotification(title, body) {
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification(title, { body, icon: currentUserData.pfp || DEFAULT_PFP });
+  }
+}
 
 const fileToBase64 = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader();
@@ -129,7 +146,8 @@ async function logUserIn(username) {
     updateUIAfterLogin(username);
   } catch(e) { console.error(e); }
   
-  switchChannel('main');
+  loadUserDMs();
+  switchChannel('main', 'text');
 }
 
 const savedSession = localStorage.getItem('obh_session');
@@ -394,7 +412,7 @@ messagesContainer.addEventListener('click', async (e) => {
           currentUserData.isStaff = false;
           updateUIAfterLogin(currentActiveUser);
           if (currentChannel === 'staff') {
-            switchChannel('main');
+            switchChannel('main', 'text');
           }
         }
         
@@ -412,8 +430,99 @@ cancelReplyBtn.addEventListener('click', () => {
   replyBanner.classList.add('hidden');
 });
 
+// DM Search Functionality
+dmSearchInput.addEventListener('input', async (e) => {
+  const queryText = e.target.value.trim().toLowerCase();
+  if (!queryText) {
+    dmSearchResults.classList.add('hidden');
+    dmSearchResults.innerHTML = '';
+    return;
+  }
+
+  try {
+    const snap = await get(child(dbRef, 'users'));
+    if (!snap.exists()) return;
+    
+    dmSearchResults.innerHTML = '';
+    let matches = 0;
+
+    snap.forEach((userSnap) => {
+      const uname = userSnap.key;
+      const udata = userSnap.val();
+      if (uname !== currentActiveUser && (uname.includes(queryText) || (udata.displayName && udata.displayName.toLowerCase().includes(queryText)))) {
+        matches++;
+        const item = document.createElement('div');
+        item.classList.add('dm-search-result-item');
+        item.innerHTML = `
+          <img src="${udata.pfp || DEFAULT_PFP}" class="dm-result-pfp">
+          <span>@${uname} ${udata.displayName ? `(${udata.displayName})` : ''}</span>
+        `;
+        item.addEventListener('click', () => {
+          openDMChannel(uname);
+          dmSearchInput.value = '';
+          dmSearchResults.classList.add('hidden');
+        });
+        dmSearchResults.appendChild(item);
+      }
+    });
+
+    if (matches > 0) {
+      dmSearchResults.classList.remove('hidden');
+    } else {
+      dmSearchResults.classList.add('hidden');
+    }
+  } catch (err) {
+    console.error(err);
+  }
+});
+
+// Hide search results on click outside
+document.addEventListener('click', (e) => {
+  if (!dmSearchInput.contains(e.target) && !dmSearchResults.contains(e.target)) {
+    dmSearchResults.classList.add('hidden');
+  }
+});
+
+function getDMKey(userA, userB) {
+  return [userA, userB].sort().join('_');
+}
+
+async function openDMChannel(otherUser) {
+  const dmId = getDMKey(currentActiveUser, otherUser);
+  // Ensure DM exists in user's DM list node
+  await set(ref(db, `user_dms/${currentActiveUser}/${dmId}`), otherUser);
+  loadUserDMs();
+  switchChannel(dmId, 'dm', otherUser);
+}
+
+function loadUserDMs() {
+  onValue(ref(db, `user_dms/${currentActiveUser}`), (snapshot) => {
+    dmChannelsList.innerHTML = '';
+    if (!snapshot.exists()) return;
+
+    snapshot.forEach((childSnap) => {
+      const dmId = childSnap.key;
+      const otherUser = childSnap.val();
+
+      const dmEl = document.createElement('div');
+      dmEl.classList.add('channel', 'dm-channel');
+      if (currentChannel === dmId) dmEl.classList.add('active');
+      dmEl.dataset.channel = dmId;
+      dmEl.dataset.type = 'dm';
+      dmEl.dataset.otheruser = otherUser;
+      dmEl.innerHTML = `<span>💬 @${otherUser}</span>`;
+
+      dmEl.addEventListener('click', () => {
+        switchChannel(dmId, 'dm', otherUser);
+      });
+
+      dmChannelsList.appendChild(dmEl);
+    });
+  });
+}
+
 // Channels & Code Logic
-document.querySelectorAll('.channel').forEach(el => {
+document.querySelectorAll('.channel[data-type="text"]').forEach(el => {
   el.addEventListener('click', async () => {
     const targetChannel = el.dataset.channel;
     if(targetChannel === currentChannel) return;
@@ -442,15 +551,24 @@ document.querySelectorAll('.channel').forEach(el => {
         }
       } catch(err) { return alert("Error verifying code."); }
     }
-    switchChannel(targetChannel);
+    switchChannel(targetChannel, 'text');
   });
 });
 
-function switchChannel(channelName) {
+function switchChannel(channelName, type, extraData = null) {
   currentChannel = channelName;
+  currentChannelType = type;
+
+  // Update active classes across all channels (text and dm)
   document.querySelectorAll('.channel').forEach(c => c.classList.remove('active'));
-  document.querySelector(`.channel[data-channel="${channelName}"]`).classList.add('active');
-  document.getElementById('current-channel-title').textContent = channelName === 'main' ? "# main-chat" : "# staff-chat";
+  const activeEl = document.querySelector(`.channel[data-channel="${channelName}"]`);
+  if (activeEl) activeEl.classList.add('active');
+
+  if (type === 'text') {
+    document.getElementById('current-channel-title').textContent = channelName === 'main' ? "# main-chat" : "# staff-chat";
+  } else {
+    document.getElementById('current-channel-title').textContent = `💬 DM with @${extraData}`;
+  }
   
   currentReplyContext = null;
   replyBanner.classList.add('hidden');
@@ -464,16 +582,18 @@ function switchChannel(channelName) {
 
 messageInput.addEventListener('input', () => {
   if (!currentActiveUser) return;
-  set(ref(db, `typing/${currentChannel}/${currentActiveUser}`), true);
+  const typingRefKey = currentChannelType === 'text' ? `typing_text/${currentChannel}` : `typing_dm/${currentChannel}`;
+  set(ref(db, `${typingRefKey}/${currentActiveUser}`), true);
   
   clearTimeout(typingTimeout);
   typingTimeout = setTimeout(() => {
-    remove(ref(db, `typing/${currentChannel}/${currentActiveUser}`));
+    remove(ref(db, `${typingRefKey}/${currentActiveUser}`));
   }, 1000);
 });
 
 function listenToTyping() {
-  unsubscribeTyping = onValue(ref(db, `typing/${currentChannel}`), (snapshot) => {
+  const typingRefKey = currentChannelType === 'text' ? `typing_text/${currentChannel}` : `typing_dm/${currentChannel}`;
+  unsubscribeTyping = onValue(ref(db, typingRefKey), (snapshot) => {
     const typers = [];
     snapshot.forEach((childSnap) => {
       if (childSnap.key !== currentActiveUser && childSnap.val() === true) typers.push(childSnap.key);
@@ -547,24 +667,37 @@ messageForm.addEventListener('submit', async (e) => {
   currentReplyContext = null;
   replyBanner.classList.add('hidden');
   
-  remove(ref(db, `typing/${currentChannel}/${currentActiveUser}`));
+  const typingRefKey = currentChannelType === 'text' ? `typing_text/${currentChannel}` : `typing_dm/${currentChannel}`;
+  remove(ref(db, `${typingRefKey}/${currentActiveUser}`));
 
-  try { await push(ref(db, `messages_${currentChannel}`), payload); } 
-  catch (error) { console.error(error); }
+  try { 
+    if (currentChannelType === 'text') {
+      await push(ref(db, `messages_${currentChannel}`), payload);
+    } else {
+      await push(ref(db, `messages_dm_${currentChannel}`), payload);
+      // Also ensure target user has this DM in their panel
+      const parts = currentChannel.split('_');
+      const otherUser = parts[0] === currentActiveUser ? parts[1] : parts[0];
+      await set(ref(db, `user_dms/${otherUser}/${currentChannel}`), currentActiveUser);
+    }
+  } catch (error) { console.error(error); }
 });
 
 function loadMessages() {
-  // Limited to the last 50 messages to save download bandwidth
-  const messagesRef = query(ref(db, `messages_${currentChannel}`), limitToLast(50));
+  const dbPath = currentChannelType === 'text' ? `messages_${currentChannel}` : `messages_dm_${currentChannel}`;
+  const messagesRef = query(ref(db, dbPath), limitToLast(50));
   
+  let isFirstLoad = true;
   unsubscribeMessages = onValue(messagesRef, (snapshot) => {
     messagesContainer.innerHTML = ''; 
     
+    let latestMsg = null;
     snapshot.forEach((childSnapshot) => {
       const data = childSnapshot.val();
+      latestMsg = data;
       const messageDiv = document.createElement('div');
       messageDiv.classList.add('message');
-      
+       
       let timeString = 'Just now';
       if (data.createdAt) {
         timeString = new Date(data.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
@@ -582,7 +715,7 @@ function loadMessages() {
           fileHtml = `<div class="attachment-container"><a href="${data.file.data}" download="${data.file.name}" class="download-link">Download ${data.file.name}</a></div>`;
         }
       }
-      
+       
       let badges = '';
       if (data.username === 'thecoolwebsitemaker') {
         badges += ' <span class="dev-badge" title="Web Developer">💻</span>';
@@ -592,7 +725,7 @@ function loadMessages() {
       }
 
       const visibleName = data.displayName || data.username;
-      
+       
       let replyHtml = "";
       if (data.replyTo) {
         const repliedName = data.replyTo.displayName || data.replyTo.username;
@@ -635,10 +768,20 @@ function loadMessages() {
           ${fileHtml}
         </div>
       `;
-      
+       
       messagesContainer.appendChild(messageDiv);
     });
-    
+
+    // Trigger desktop notification for incoming messages/replies if page is loaded and message is new
+    if (!isFirstLoad && latestMsg && latestMsg.username !== currentActiveUser) {
+      const isReplyToMe = latestMsg.replyTo && latestMsg.replyTo.username === currentActiveUser;
+      if (currentChannelType === 'dm' || isReplyToMe) {
+        const title = currentChannelType === 'dm' ? `New DM from @${latestMsg.username}` : `New reply from @${latestMsg.username}`;
+        showDesktopNotification(title, latestMsg.text || "sent an attachment");
+      }
+    }
+
+    isFirstLoad = false;
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
   });
 }
