@@ -18,9 +18,9 @@ const db = getDatabase(app);
 const dbRef = ref(db);
 
 const DEFAULT_PFP = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23999'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z'/%3E%3C/svg%3E";
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
-// DOM Elements
+// DOM
 const authScreen = document.getElementById('auth-screen');
 const chatScreen = document.getElementById('chat-screen');
 const blockedScreen = document.getElementById('blocked-screen');
@@ -32,128 +32,82 @@ const currentUserSpan = document.getElementById('current-user');
 const messageForm = document.getElementById('message-form');
 const messageInput = document.getElementById('message-input');
 const messagesContainer = document.getElementById('messages-container');
-const fileUpload = document.getElementById('file-upload');
-const filePreview = document.getElementById('file-preview');
-const filePreviewName = document.getElementById('file-preview-name');
-const chatError = document.getElementById('chat-error');
-const typingIndicator = document.getElementById('typing-indicator');
-
-// DM Search Elements
 const dmSearchInput = document.getElementById('dm-search-input');
 const dmSearchResults = document.getElementById('dm-search-results');
 const dmChannelsList = document.getElementById('dm-channels-list');
-
-// Unblock Elements
-const unblockCodeInput = document.getElementById('unblock-code-input');
-const unblockBtn = document.getElementById('unblock-btn');
-
-// Global Event Elements
-const cheddarOverlay = document.getElementById('cheddar-overlay');
-const cheddarAudio = document.getElementById('cheddar-audio');
-let cheddarTimeout;
-
-// Signup Specific
-const loginFields = document.getElementById('login-fields');
-const ageGroup = document.getElementById('age-group');
-const ageSelect = document.getElementById('age-select');
-const loginBtn = document.getElementById('login-btn');
-const signupBtn = document.getElementById('signup-btn');
-
-// Profile & Reply UI
-const profileModal = document.getElementById('profile-modal');
-const editProfileBtn = document.getElementById('edit-profile-btn');
-const saveProfileBtn = document.getElementById('save-profile-btn');
-const cancelProfileBtn = document.getElementById('cancel-profile-btn');
-const displayNameInput = document.getElementById('display-name-input');
-const bioInput = document.getElementById('bio-input');
-const replyBanner = document.getElementById('reply-banner');
-const replyToName = document.getElementById('reply-to-name');
-const replyToText = document.getElementById('reply-to-text');
-const cancelReplyBtn = document.getElementById('cancel-reply-btn');
+const openAdminBtn = document.getElementById('open-admin-btn');
+const adminModal = document.getElementById('admin-modal');
+const closeAdminBtn = document.getElementById('close-admin-btn');
+const announceText = document.getElementById('announce-text');
+const announceDuration = document.getElementById('announce-duration');
+const sendAnnounceBtn = document.getElementById('send-announce-btn');
+const announcementBanner = document.getElementById('announcement-banner');
+const announcementTextDisplay = document.getElementById('announcement-text');
+const dmBlockToggleBtn = document.getElementById('dm-block-toggle-btn');
 
 let unsubscribeMessages = null;
-let unsubscribeTyping = null;
-let unsubscribeBlockStatus = null;
 let currentActiveUser = null;
 let currentUserData = {};
-let lastMessageTime = 0;
-let attachedFileData = null;
 let currentChannel = "main";
-let currentChannelType = "text"; // "text" or "dm"
-let typingTimeout = null;
-let currentReplyContext = null;
+let currentChannelType = "text"; 
+let currentDMTarget = null;
+let isCurrentDMBlocked = false;
+let adminTargetUser = null;
+let announceTimeout = null;
 
-// Request Desktop Notifications Permission
-if ("Notification" in window && Notification.permission !== "granted") {
-  Notification.requestPermission();
-}
-
+if ("Notification" in window && Notification.permission !== "granted") Notification.requestPermission();
 function showDesktopNotification(title, body) {
-  if ("Notification" in window && Notification.permission === "granted") {
-    new Notification(title, { body, icon: currentUserData.pfp || DEFAULT_PFP });
-  }
-}
-
-const fileToBase64 = (file) => new Promise((resolve, reject) => {
-  const reader = new FileReader();
-  reader.readAsDataURL(file);
-  reader.onload = () => resolve(reader.result);
-  reader.onerror = (error) => reject(error);
-});
-
-function updateUIAfterLogin(username) {
-  currentPfpImg.src = currentUserData.pfp || DEFAULT_PFP;
-  const displayName = currentUserData.displayName || username;
-  
-  let badges = '';
-  if (username === 'thecoolwebsitemaker') {
-    badges += ' <span class="dev-badge" title="Web Developer">💻</span>';
-  }
-  if (currentUserData.isStaff) {
-    badges += ' <span class="staff-badge" title="Staff">🛡️</span>';
-  }
-  
-  currentUserSpan.innerHTML = displayName + badges;
-}
-
-function listenToBlockStatus(username) {
-  if (unsubscribeBlockStatus) unsubscribeBlockStatus();
-  unsubscribeBlockStatus = onValue(ref(db, `blocked_users/${username}`), (snapshot) => {
-    if (snapshot.exists() && snapshot.val() === true) {
-      authScreen.classList.add('hidden');
-      chatScreen.classList.add('hidden');
-      blockedScreen.classList.remove('hidden');
-    } else {
-      blockedScreen.classList.add('hidden');
-      if (currentActiveUser) {
-        authScreen.classList.add('hidden');
-        chatScreen.classList.remove('hidden');
-      }
-    }
-  });
+  if ("Notification" in window && Notification.permission === "granted") new Notification(title, { body, icon: currentUserData.pfp || DEFAULT_PFP });
 }
 
 async function logUserIn(username) {
   currentActiveUser = username;
-  listenToBlockStatus(username);
-  
-  try {
-    const snap = await get(child(dbRef, `users/${username}`));
-    if(snap.exists()){
+  onValue(ref(db, `blocked_users/${username}`), (snap) => {
+    if (snap.exists() && snap.val() === true) {
+      authScreen.classList.add('hidden'); chatScreen.classList.add('hidden'); blockedScreen.classList.remove('hidden');
+    } else {
+      blockedScreen.classList.add('hidden');
+      if (currentActiveUser) { authScreen.classList.add('hidden'); chatScreen.classList.remove('hidden'); }
+    }
+  });
+
+  // Verify Account Integrity (for wipes)
+  onValue(ref(db, `users/${username}`), (snap) => {
+    if(!snap.exists() && currentActiveUser === username) {
+      alert("Your account state has changed or been wiped. Please log in again.");
+      document.getElementById('logout-btn').click();
+    } else {
       currentUserData = snap.val();
       if(!currentUserData.pfp) currentUserData.pfp = DEFAULT_PFP;
+      updateUIAfterLogin(username);
     }
-    updateUIAfterLogin(username);
-  } catch(e) { console.error(e); }
-  
+  });
+
   loadUserDMs();
   switchChannel('main', 'text');
+}
+
+function updateUIAfterLogin(username) {
+  currentPfpImg.src = currentUserData.pfp || DEFAULT_PFP;
+  let badges = (username === 'thecoolwebsitemaker') ? ' <span class="dev-badge">💻</span>' : '';
+  if (currentUserData.isStaff) badges += ' <span class="staff-badge">🛡️</span>';
+  currentUserSpan.innerHTML = (currentUserData.displayName || username) + badges;
+  
+  if (currentUserData.isStaff || username === 'thecoolwebsitemaker') {
+    openAdminBtn.classList.remove('hidden');
+    if (username === 'thecoolwebsitemaker') {
+      document.getElementById('owner-tools').classList.remove('hidden');
+      document.getElementById('admin-revoke-btn').classList.remove('hidden');
+    }
+  } else {
+    openAdminBtn.classList.add('hidden');
+  }
 }
 
 const savedSession = localStorage.getItem('obh_session');
 if (savedSession) logUserIn(savedSession);
 
-loginBtn.addEventListener('click', async (e) => {
+document.getElementById('login-btn').addEventListener('click', async (e) => {
   e.preventDefault();
   authError.textContent = 'Checking...';
   const username = usernameInput.value.trim().toLowerCase();
@@ -161,283 +115,159 @@ loginBtn.addEventListener('click', async (e) => {
   if (!username || !password) return (authError.textContent = "Enter both fields.");
 
   try {
-    const snapshot = await get(child(dbRef, `users/${username}`));
-    if (snapshot.exists() && snapshot.val().password === password) {
-      localStorage.setItem('obh_session', username);
-      authError.textContent = '';
-      logUserIn(username);
-    } else {
-      authError.textContent = "Incorrect username or password.";
-    }
+    const snap = await get(child(dbRef, `users/${username}`));
+    if (snap.exists() && snap.val().password === password) {
+      localStorage.setItem('obh_session', username); authError.textContent = ''; logUserIn(username);
+    } else { authError.textContent = "Incorrect username or password."; }
   } catch (error) { authError.textContent = "Database error."; }
-});
-
-signupBtn.addEventListener('click', async (e) => {
-  e.preventDefault();
-  const username = usernameInput.value.trim().toLowerCase();
-  const password = passwordInput.value;
-
-  if (ageGroup.classList.contains('hidden')) {
-    if (username.length < 3 || password.length < 4) {
-      authError.textContent = "Username > 3 chars, Password > 4 chars.";
-      return;
-    }
-    authError.textContent = "Checking username...";
-    try {
-      const snapshot = await get(child(dbRef, `users/${username}`));
-      if (snapshot.exists()) return (authError.textContent = "Username taken.");
-      authError.textContent = "";
-      loginFields.classList.add('hidden');
-      loginBtn.classList.add('hidden');
-      ageGroup.classList.remove('hidden');
-      signupBtn.textContent = "Complete Account";
-    } catch (e) { authError.textContent = "Database error."; }
-  } else {
-    authError.textContent = "Creating account...";
-    const age = ageSelect.value;
-    try {
-      await set(ref(db, `users/${username}`), { 
-        password, pfp: DEFAULT_PFP, age, isStaff: false, displayName: "", bio: "", createdAt: serverTimestamp() 
-      });
-      localStorage.setItem('obh_session', username);
-      authError.textContent = '';
-      logUserIn(username);
-      
-      loginFields.classList.remove('hidden');
-      loginBtn.classList.remove('hidden');
-      ageGroup.classList.add('hidden');
-      signupBtn.textContent = "Create Account";
-    } catch (error) { authError.textContent = "Database error."; }
-  }
 });
 
 document.getElementById('logout-btn').addEventListener('click', () => {
   localStorage.removeItem('obh_session');
-  currentActiveUser = null;
-  currentUserData = {};
-  authScreen.classList.remove('hidden');
-  chatScreen.classList.add('hidden');
-  blockedScreen.classList.add('hidden');
-  
+  currentActiveUser = null; currentUserData = {};
+  authScreen.classList.remove('hidden'); chatScreen.classList.add('hidden'); blockedScreen.classList.add('hidden');
   if (unsubscribeMessages) unsubscribeMessages();
-  if (unsubscribeTyping) unsubscribeTyping();
-  if (unsubscribeBlockStatus) {
-    unsubscribeBlockStatus();
-    unsubscribeBlockStatus = null;
-  }
 });
 
-// Profile Editing
-editProfileBtn.addEventListener('click', () => {
-  displayNameInput.value = currentUserData?.displayName || "";
-  bioInput.value = currentUserData?.bio || "";
-  profileModal.classList.remove('hidden');
-});
-
-cancelProfileBtn.addEventListener('click', () => {
-  profileModal.classList.add('hidden');
-});
-
-saveProfileBtn.addEventListener('click', async () => {
-  const newDisplayName = displayNameInput.value.trim();
-  const newBio = bioInput.value.trim();
-
-  try {
-    await update(ref(db, `users/${currentActiveUser}`), { 
-      displayName: newDisplayName, 
-      bio: newBio 
-    });
-    currentUserData.displayName = newDisplayName;
-    currentUserData.bio = newBio;
-    updateUIAfterLogin(currentActiveUser);
-    profileModal.classList.add('hidden');
-  } catch(err) {
-    alert("Failed to save profile.");
-  }
-});
-
-document.getElementById('pfp-upload').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file || !currentActiveUser) return;
-  if (file.size > MAX_FILE_SIZE) return alert("PFP must be under 5MB.");
+// Admin Panel Logic
+openAdminBtn.addEventListener('click', async () => {
+  adminModal.classList.remove('hidden');
+  const staffSelect = document.getElementById('staff-roster-select');
+  staffSelect.innerHTML = '<option value="">-- View Current Staff --</option>';
+  const snap = await get(child(dbRef, 'users'));
+  snap.forEach(user => {
+    if(user.val().isStaff) staffSelect.innerHTML += `<option value="${user.key}">@${user.key} ${user.val().displayName ? `(${user.val().displayName})` : ''}</option>`;
+  });
   
-  try {
-    const base64 = await fileToBase64(file);
-    await update(ref(db, `users/${currentActiveUser}`), { pfp: base64 });
-    currentUserData.pfp = base64;
-    currentPfpImg.src = base64;
-  } catch (err) { console.error(err); }
+  if(currentActiveUser === 'thecoolwebsitemaker') loadGeneratedCodes();
 });
 
-// Unblock Submission
-unblockBtn.addEventListener('click', async () => {
-  const code = unblockCodeInput.value.trim();
-  if (!code) return alert("Please enter an unblock code.");
+closeAdminBtn.addEventListener('click', () => adminModal.classList.add('hidden'));
 
-  try {
-    const res = await fetch('unblockcodes.txt');
-    if(!res.ok) throw new Error("Could not load codes file.");
-    const text = await res.text();
-    const validCodes = text.split('\n').map(c => c.trim()).filter(c => c !== "");
+// Announcements
+sendAnnounceBtn.addEventListener('click', async () => {
+  const text = announceText.value.trim();
+  const dur = parseInt(announceDuration.value);
+  if(!text) return;
+  await set(ref(db, 'global_events/announcement'), { text, expiresAt: Date.now() + (dur * 1000) });
+  announceText.value = '';
+});
 
-    if(validCodes.includes(code)) {
-      const claimCheck = await get(child(dbRef, `used_unblock_codes/${code}`));
-      if(claimCheck.exists()) return alert("This unblock code has already been used!");
-      
-      await set(ref(db, `used_unblock_codes/${code}`), currentActiveUser);
-      await remove(ref(db, `blocked_users/${currentActiveUser}`));
-      
-      alert("Successfully unblocked! Welcome back.");
-      unblockCodeInput.value = "";
-    } else {
-      return alert("Invalid unblock code.");
-    }
-  } catch(err) { 
-    return alert("Error verifying code."); 
+onValue(ref(db, 'global_events/announcement'), (snap) => {
+  if(!snap.exists()) return;
+  const data = snap.val();
+  if(Date.now() < data.expiresAt) {
+    announcementTextDisplay.textContent = data.text;
+    announcementBanner.classList.remove('hidden');
+    clearTimeout(announceTimeout);
+    announceTimeout = setTimeout(() => announcementBanner.classList.add('hidden'), data.expiresAt - Date.now());
   }
 });
 
-// Keydown listener for the global screen event
-document.addEventListener('keydown', async (e) => {
-  if (e.key === '=' && currentActiveUser) {
-    if (currentActiveUser !== "thecoolwebsitemaker") {
-      alert("You are not authorized to use secret codes.");
-      return;
-    }
-    
-    const code = prompt("Enter secret code:");
-    if (code === "cheddarandbbqwavy") {
-      try {
-        await set(ref(db, 'global_events/cheddar'), { time: Date.now() });
-      } catch(err) {
-        console.error("Database error while triggering event.", err);
-      }
-    } else if (code) {
-      alert("Invalid code.");
-    }
+// User Management Search
+document.getElementById('admin-search-btn').addEventListener('click', async () => {
+  const search = document.getElementById('admin-user-search').value.trim().toLowerCase();
+  const snap = await get(child(dbRef, `users/${search}`));
+  if(snap.exists()) {
+    adminTargetUser = search;
+    document.getElementById('target-user-display').textContent = `Target: @${search}`;
+    document.getElementById('admin-user-actions').classList.remove('hidden');
+  } else {
+    alert("User not found.");
+    document.getElementById('admin-user-actions').classList.add('hidden');
   }
 });
 
-// Listener for the global event broadcast
-onValue(ref(db, 'global_events/cheddar'), (snapshot) => {
-  if (snapshot.exists()) {
-    const data = snapshot.val();
-    const now = Date.now();
-    const timeDiff = now - data.time;
-    
-    if (timeDiff < 30000) {
-      const remainingTime = 30000 - timeDiff;
-      
-      cheddarOverlay.classList.remove('hidden');
-      cheddarAudio.currentTime = 0;
-      cheddarAudio.loop = true;
-      cheddarAudio.play().catch(e => console.warn("Audio autoplay blocked.", e));
-      
-      clearTimeout(cheddarTimeout);
-      cheddarTimeout = setTimeout(() => {
-        cheddarOverlay.classList.add('hidden');
-        cheddarAudio.pause();
-        cheddarAudio.currentTime = 0;
-      }, remainingTime);
-    }
-  }
+document.getElementById('admin-mute-btn').addEventListener('click', async () => {
+  const mins = parseInt(document.getElementById('mute-duration').value);
+  if(!adminTargetUser || isNaN(mins)) return;
+  await update(ref(db, `users/${adminTargetUser}`), { mutedUntil: Date.now() + (mins * 60000) });
+  alert(`@${adminTargetUser} muted for ${mins} minutes.`);
 });
 
-// Delegate Clicks for Usernames, Replies, Blocks, & Revoking Staff
-messagesContainer.addEventListener('click', async (e) => {
-  if (e.target.classList.contains('message-author')) {
-    const clickedUser = e.target.dataset.username;
-    try {
-      const snap = await get(child(dbRef, `users/${clickedUser}`));
-      if(snap.exists()) {
-        const data = snap.val();
-        const disp = data.displayName ? ` (${data.displayName})` : '';
-        const age = data.age || 'Not set';
-        const bio = data.bio || 'No bio written.';
-        
-        alert(`User: @${clickedUser}${disp}\nAge: ${age}\nBio: ${bio}`);
-      } else {
-        alert(`User @${clickedUser} could not be found.`);
-      }
-    } catch(err) { console.error(err); }
-  }
+document.getElementById('admin-wipe-btn').addEventListener('click', async () => {
+  if(!adminTargetUser) return;
+  if(!confirm(`Are you sure you want to wipe @${adminTargetUser}?`)) return;
   
-  if (e.target.classList.contains('reply-btn')) {
-    const rUsername = e.target.dataset.username;
-    const rDisplay = e.target.dataset.displayname;
-    const rText = e.target.dataset.text;
-    
-    currentReplyContext = {
-      username: rUsername,
-      displayName: rDisplay,
-      text: rText
-    };
-    
-    replyToName.textContent = rDisplay || rUsername;
-    replyToText.textContent = rText || "Attachment";
-    replyBanner.classList.remove('hidden');
-    messageInput.focus();
-  }
+  const rand = Math.random().toString(36).substring(2, 8);
+  const newUname = 'user_' + rand;
+  const oldData = (await get(child(dbRef, `users/${adminTargetUser}`))).val();
+  
+  await set(ref(db, `users/${newUname}`), { ...oldData, displayName: "", bio: "", pfp: DEFAULT_PFP, isStaff: false });
+  await remove(ref(db, `users/${adminTargetUser}`));
+  alert(`Account wiped. New username: ${newUname}`);
+  document.getElementById('admin-user-actions').classList.add('hidden');
+});
 
-  if (e.target.classList.contains('block-btn')) {
-    const targetUsername = e.target.dataset.username;
-    const confirmBlock = confirm(`Are you sure you want to block ${targetUsername} from the site?`);
-    if (confirmBlock) {
-      try {
-        await set(ref(db, `blocked_users/${targetUsername}`), true);
-        alert(`${targetUsername} has been blocked.`);
-      } catch (err) {
-        console.error("Error blocking user:", err);
-      }
-    }
-  }
+document.getElementById('admin-block-btn').addEventListener('click', async () => {
+  if(!adminTargetUser) return;
+  await set(ref(db, `blocked_users/${adminTargetUser}`), true);
+  alert(`@${adminTargetUser} blocked from the site.`);
+});
 
-  if (e.target.classList.contains('revoke-staff-btn')) {
-    const targetUsername = e.target.dataset.username;
-    const confirmRevoke = confirm(`Are you sure you want to revoke staff privileges from ${targetUsername}?`);
-    if (confirmRevoke) {
-      try {
-        const usedCodesSnap = await get(child(dbRef, 'used_codes'));
-        if (usedCodesSnap.exists()) {
-          usedCodesSnap.forEach((childSnap) => {
-            if (childSnap.val() === targetUsername) {
-              remove(ref(db, `used_codes/${childSnap.key}`));
-            }
-          });
-        }
-        
-        await update(ref(db, `users/${targetUsername}`), { isStaff: false });
-        
-        if (currentActiveUser === targetUsername) {
-          currentUserData.isStaff = false;
-          updateUIAfterLogin(currentActiveUser);
-          if (currentChannel === 'staff') {
-            switchChannel('main', 'text');
-          }
-        }
-        
-        alert(`Staff privileges have been revoked from ${targetUsername}.`);
-      } catch (err) {
-        console.error("Error revoking staff:", err);
-        alert("Failed to revoke staff privileges.");
-      }
-    }
+document.getElementById('admin-revoke-btn').addEventListener('click', async () => {
+  if(!adminTargetUser || currentActiveUser !== 'thecoolwebsitemaker') return;
+  await update(ref(db, `users/${adminTargetUser}`), { isStaff: false });
+  alert(`Staff privileges revoked from @${adminTargetUser}.`);
+});
+
+// Owner Tools
+async function loadGeneratedCodes() {
+  const codesSelect = document.getElementById('generated-codes-select');
+  codesSelect.innerHTML = '<option value="">-- View Generated Codes --</option>';
+  
+  const staffSnap = await get(child(dbRef, 'generated_codes/staff'));
+  if(staffSnap.exists()) {
+    staffSnap.forEach(c => codesSelect.innerHTML += `<option>[STAFF] ${c.key} - Used by: ${c.val().usedBy || 'UNUSED'}</option>`);
+  }
+  const unblockSnap = await get(child(dbRef, 'generated_codes/unblock'));
+  if(unblockSnap.exists()) {
+    unblockSnap.forEach(c => codesSelect.innerHTML += `<option>[UNBLOCK] ${c.key} - Used by: ${c.val().usedBy || 'UNUSED'}</option>`);
+  }
+}
+
+document.getElementById('gen-staff-code-btn').addEventListener('click', async () => {
+  const code = 'staffaccess_' + Math.random().toString(36).substring(2, 10);
+  await set(ref(db, `generated_codes/staff/${code}`), { usedBy: null });
+  alert(`Generated: ${code}`); loadGeneratedCodes();
+});
+
+document.getElementById('gen-unblock-code-btn').addEventListener('click', async () => {
+  const code = 'unblock_' + Math.random().toString(36).substring(2, 10);
+  await set(ref(db, `generated_codes/unblock/${code}`), { usedBy: null });
+  alert(`Generated: ${code}`); loadGeneratedCodes();
+});
+
+// DM Blocking (For everyone)
+dmBlockToggleBtn.addEventListener('click', async () => {
+  if(!currentDMTarget) return;
+  if(isCurrentDMBlocked) {
+    await remove(ref(db, `user_dms_blocked/${currentActiveUser}/${currentDMTarget}`));
+    dmBlockToggleBtn.textContent = "Block User";
+    dmBlockToggleBtn.classList.remove('secondary-btn');
+    dmBlockToggleBtn.classList.add('danger-btn');
+    isCurrentDMBlocked = false;
+  } else {
+    await set(ref(db, `user_dms_blocked/${currentActiveUser}/${currentDMTarget}`), true);
+    dmBlockToggleBtn.textContent = "Unblock User";
+    dmBlockToggleBtn.classList.remove('danger-btn');
+    dmBlockToggleBtn.classList.add('secondary-btn');
+    isCurrentDMBlocked = true;
   }
 });
 
-cancelReplyBtn.addEventListener('click', () => {
-  currentReplyContext = null;
-  replyBanner.classList.add('hidden');
-});
+function checkDMBlockStatus(targetUser) {
+  onValue(ref(db, `user_dms_blocked/${currentActiveUser}/${targetUser}`), (snap) => {
+    isCurrentDMBlocked = (snap.exists() && snap.val() === true);
+    dmBlockToggleBtn.textContent = isCurrentDMBlocked ? "Unblock User" : "Block User";
+    dmBlockToggleBtn.className = isCurrentDMBlocked ? "secondary-btn" : "danger-btn";
+  });
+}
 
-// DM Search Functionality
+// DM Search
 dmSearchInput.addEventListener('input', async (e) => {
   const queryText = e.target.value.trim().toLowerCase();
-  if (!queryText) {
-    dmSearchResults.classList.add('hidden');
-    dmSearchResults.innerHTML = '';
-    return;
-  }
+  if (!queryText) { dmSearchResults.classList.add('hidden'); dmSearchResults.innerHTML = ''; return; }
 
   try {
     const snap = await get(child(dbRef, 'users'));
@@ -445,53 +275,30 @@ dmSearchInput.addEventListener('input', async (e) => {
     
     dmSearchResults.innerHTML = '';
     let matches = 0;
-
     snap.forEach((userSnap) => {
-      const uname = userSnap.key;
-      const udata = userSnap.val();
+      const uname = userSnap.key; const udata = userSnap.val();
       if (uname !== currentActiveUser && (uname.includes(queryText) || (udata.displayName && udata.displayName.toLowerCase().includes(queryText)))) {
         matches++;
         const item = document.createElement('div');
         item.classList.add('dm-search-result-item');
-        item.innerHTML = `
-          <img src="${udata.pfp || DEFAULT_PFP}" class="dm-result-pfp">
-          <span>@${uname} ${udata.displayName ? `(${udata.displayName})` : ''}</span>
-        `;
-        item.addEventListener('click', () => {
-          openDMChannel(uname);
-          dmSearchInput.value = '';
-          dmSearchResults.classList.add('hidden');
-        });
+        item.innerHTML = `<img src="${udata.pfp || DEFAULT_PFP}" class="dm-result-pfp"><span>@${uname}</span>`;
+        item.addEventListener('click', () => { openDMChannel(uname); dmSearchInput.value = ''; dmSearchResults.classList.add('hidden'); });
         dmSearchResults.appendChild(item);
       }
     });
-
-    if (matches > 0) {
-      dmSearchResults.classList.remove('hidden');
-    } else {
-      dmSearchResults.classList.add('hidden');
-    }
-  } catch (err) {
-    console.error(err);
-  }
+    if (matches > 0) dmSearchResults.classList.remove('hidden');
+    else dmSearchResults.classList.add('hidden');
+  } catch (err) { console.error(err); }
 });
 
-// Hide search results on click outside
 document.addEventListener('click', (e) => {
-  if (!dmSearchInput.contains(e.target) && !dmSearchResults.contains(e.target)) {
-    dmSearchResults.classList.add('hidden');
-  }
+  if (!dmSearchInput.contains(e.target) && !dmSearchResults.contains(e.target)) dmSearchResults.classList.add('hidden');
 });
 
-function getDMKey(userA, userB) {
-  return [userA, userB].sort().join('_');
-}
-
+function getDMKey(userA, userB) { return [userA, userB].sort().join('_'); }
 async function openDMChannel(otherUser) {
   const dmId = getDMKey(currentActiveUser, otherUser);
-  // Ensure DM exists in user's DM list node
   await set(ref(db, `user_dms/${currentActiveUser}/${dmId}`), otherUser);
-  loadUserDMs();
   switchChannel(dmId, 'dm', otherUser);
 }
 
@@ -499,183 +306,105 @@ function loadUserDMs() {
   onValue(ref(db, `user_dms/${currentActiveUser}`), (snapshot) => {
     dmChannelsList.innerHTML = '';
     if (!snapshot.exists()) return;
-
     snapshot.forEach((childSnap) => {
-      const dmId = childSnap.key;
-      const otherUser = childSnap.val();
-
+      const dmId = childSnap.key; const otherUser = childSnap.val();
       const dmEl = document.createElement('div');
       dmEl.classList.add('channel', 'dm-channel');
       if (currentChannel === dmId) dmEl.classList.add('active');
-      dmEl.dataset.channel = dmId;
-      dmEl.dataset.type = 'dm';
-      dmEl.dataset.otheruser = otherUser;
       dmEl.innerHTML = `<span>💬 @${otherUser}</span>`;
-
-      dmEl.addEventListener('click', () => {
-        switchChannel(dmId, 'dm', otherUser);
-      });
-
+      dmEl.addEventListener('click', () => switchChannel(dmId, 'dm', otherUser));
       dmChannelsList.appendChild(dmEl);
     });
   });
 }
 
-// Channels & Code Logic
+// Channel Switching & Code Redemptions
 document.querySelectorAll('.channel[data-type="text"]').forEach(el => {
   el.addEventListener('click', async () => {
     const targetChannel = el.dataset.channel;
     if(targetChannel === currentChannel) return;
 
     if(targetChannel === 'staff' && !currentUserData.isStaff) {
-      const code = prompt("Enter an admin code to unlock Staff Chat:");
+      const code = prompt("Enter a staff code:");
       if(!code) return;
-
       try {
-        const res = await fetch('codes.txt');
-        if(!res.ok) throw new Error("Could not load codes file.");
-        const text = await res.text();
-        const validCodes = text.split('\n').map(c => c.trim()).filter(c => c !== "");
-
-        if(validCodes.includes(code)) {
-          const claimCheck = await get(child(dbRef, `used_codes/${code}`));
-          if(claimCheck.exists()) return alert("This code has already been used!");
-          
-          await set(ref(db, `used_codes/${code}`), currentActiveUser);
-          await update(ref(db, `users/${currentActiveUser}`), { isStaff: true });
-          currentUserData.isStaff = true;
-          updateUIAfterLogin(currentActiveUser);
-          alert("Access Granted! You are now Staff.");
-        } else {
-          return alert("Invalid code.");
-        }
+        const claimCheck = await get(child(dbRef, `generated_codes/staff/${code}`));
+        if(!claimCheck.exists()) return alert("Invalid code.");
+        if(claimCheck.val().usedBy) return alert("Code already used!");
+        
+        await update(ref(db, `generated_codes/staff/${code}`), { usedBy: currentActiveUser });
+        await update(ref(db, `users/${currentActiveUser}`), { isStaff: true });
+        alert("Access Granted! You are now Staff.");
       } catch(err) { return alert("Error verifying code."); }
     }
     switchChannel(targetChannel, 'text');
   });
 });
 
+document.getElementById('unblock-btn').addEventListener('click', async () => {
+  const code = document.getElementById('unblock-code-input').value.trim();
+  if (!code) return;
+  try {
+    const claimCheck = await get(child(dbRef, `generated_codes/unblock/${code}`));
+    if(!claimCheck.exists()) return alert("Invalid unblock code.");
+    if(claimCheck.val().usedBy) return alert("Code already used!");
+    
+    await update(ref(db, `generated_codes/unblock/${code}`), { usedBy: currentActiveUser });
+    await remove(ref(db, `blocked_users/${currentActiveUser}`));
+    alert("Successfully unblocked! Welcome back.");
+  } catch(err) { return alert("Error verifying code."); }
+});
+
 function switchChannel(channelName, type, extraData = null) {
-  currentChannel = channelName;
-  currentChannelType = type;
-
-  // Update active classes across all channels (text and dm)
+  currentChannel = channelName; currentChannelType = type;
   document.querySelectorAll('.channel').forEach(c => c.classList.remove('active'));
-  const activeEl = document.querySelector(`.channel[data-channel="${channelName}"]`);
-  if (activeEl) activeEl.classList.add('active');
-
+  
   if (type === 'text') {
     document.getElementById('current-channel-title').textContent = channelName === 'main' ? "# main-chat" : "# staff-chat";
+    dmBlockToggleBtn.classList.add('hidden');
+    currentDMTarget = null;
   } else {
     document.getElementById('current-channel-title').textContent = `💬 DM with @${extraData}`;
+    dmBlockToggleBtn.classList.remove('hidden');
+    currentDMTarget = extraData;
+    checkDMBlockStatus(extraData);
   }
-  
-  currentReplyContext = null;
-  replyBanner.classList.add('hidden');
   
   if (unsubscribeMessages) unsubscribeMessages();
-  if (unsubscribeTyping) unsubscribeTyping();
-  
   loadMessages();
-  listenToTyping();
 }
-
-messageInput.addEventListener('input', () => {
-  if (!currentActiveUser) return;
-  const typingRefKey = currentChannelType === 'text' ? `typing_text/${currentChannel}` : `typing_dm/${currentChannel}`;
-  set(ref(db, `${typingRefKey}/${currentActiveUser}`), true);
-  
-  clearTimeout(typingTimeout);
-  typingTimeout = setTimeout(() => {
-    remove(ref(db, `${typingRefKey}/${currentActiveUser}`));
-  }, 1000);
-});
-
-function listenToTyping() {
-  const typingRefKey = currentChannelType === 'text' ? `typing_text/${currentChannel}` : `typing_dm/${currentChannel}`;
-  unsubscribeTyping = onValue(ref(db, typingRefKey), (snapshot) => {
-    const typers = [];
-    snapshot.forEach((childSnap) => {
-      if (childSnap.key !== currentActiveUser && childSnap.val() === true) typers.push(childSnap.key);
-    });
-
-    if (typers.length > 0) {
-      typingIndicator.textContent = typers.join(', ') + (typers.length > 1 ? " are typing..." : " is typing...");
-      typingIndicator.classList.remove('hidden');
-    } else {
-      typingIndicator.classList.add('hidden');
-    }
-  });
-}
-
-fileUpload.addEventListener('change', async (e) => {
-  chatError.classList.add('hidden');
-  const file = e.target.files[0];
-  if (!file) return;
-  
-  if (file.size > MAX_FILE_SIZE) {
-    chatError.textContent = "File exceeds 5MB limit.";
-    chatError.classList.remove('hidden');
-    fileUpload.value = "";
-    return;
-  }
-  try {
-    const base64 = await fileToBase64(file);
-    attachedFileData = { name: file.name, type: file.type, data: base64 };
-    filePreviewName.textContent = file.name;
-    filePreview.classList.remove('hidden');
-  } catch (err) { console.error(err); }
-});
-
-document.getElementById('remove-file-btn').addEventListener('click', () => {
-  attachedFileData = null;
-  fileUpload.value = "";
-  filePreview.classList.add('hidden');
-});
 
 messageForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = messageInput.value.trim();
-  if (text === "" && !attachedFileData) return;
+  if (!text) return;
   
-  const now = Date.now();
-  if (now - lastMessageTime < 1000) {
-    chatError.textContent = "Wait a second before sending another message!";
-    chatError.classList.remove('hidden');
+  // Mute Check
+  if(currentUserData.mutedUntil && currentUserData.mutedUntil > Date.now()) {
+    const minsLeft = Math.ceil((currentUserData.mutedUntil - Date.now()) / 60000);
+    alert(`You are muted for ${minsLeft} more minutes.`);
     return;
   }
-  
-  chatError.classList.add('hidden');
-  lastMessageTime = now;
+
+  // DM Block Check
+  if(currentChannelType === 'dm') {
+    const blockCheck = await get(child(dbRef, `user_dms_blocked/${currentDMTarget}/${currentActiveUser}`));
+    if(blockCheck.exists() && blockCheck.val() === true) {
+      alert("You cannot send messages to this user.");
+      return;
+    }
+  }
 
   const payload = {
-    text: text,
-    username: currentActiveUser,
-    displayName: currentUserData?.displayName || "",
-    pfp: currentUserData?.pfp || DEFAULT_PFP,
-    isStaff: currentUserData?.isStaff || false,
-    createdAt: serverTimestamp()
+    text: text, username: currentActiveUser, displayName: currentUserData?.displayName || "",
+    pfp: currentUserData?.pfp || DEFAULT_PFP, isStaff: currentUserData?.isStaff || false, createdAt: serverTimestamp()
   };
 
-  if (attachedFileData) payload.file = attachedFileData;
-  if (currentReplyContext) payload.replyTo = currentReplyContext;
-
   messageInput.value = '';
-  attachedFileData = null;
-  fileUpload.value = "";
-  filePreview.classList.add('hidden');
-  currentReplyContext = null;
-  replyBanner.classList.add('hidden');
-  
-  const typingRefKey = currentChannelType === 'text' ? `typing_text/${currentChannel}` : `typing_dm/${currentChannel}`;
-  remove(ref(db, `${typingRefKey}/${currentActiveUser}`));
-
   try { 
-    if (currentChannelType === 'text') {
-      await push(ref(db, `messages_${currentChannel}`), payload);
-    } else {
+    if (currentChannelType === 'text') { await push(ref(db, `messages_${currentChannel}`), payload); } 
+    else {
       await push(ref(db, `messages_dm_${currentChannel}`), payload);
-      // Also ensure target user has this DM in their panel
       const parts = currentChannel.split('_');
       const otherUser = parts[0] === currentActiveUser ? parts[1] : parts[0];
       await set(ref(db, `user_dms/${otherUser}/${currentChannel}`), currentActiveUser);
@@ -685,102 +414,33 @@ messageForm.addEventListener('submit', async (e) => {
 
 function loadMessages() {
   const dbPath = currentChannelType === 'text' ? `messages_${currentChannel}` : `messages_dm_${currentChannel}`;
-  const messagesRef = query(ref(db, dbPath), limitToLast(50));
-  
   let isFirstLoad = true;
-  unsubscribeMessages = onValue(messagesRef, (snapshot) => {
+  unsubscribeMessages = onValue(query(ref(db, dbPath), limitToLast(50)), (snapshot) => {
     messagesContainer.innerHTML = ''; 
-    
     let latestMsg = null;
-    snapshot.forEach((childSnapshot) => {
-      const data = childSnapshot.val();
-      latestMsg = data;
+    snapshot.forEach((childSnap) => {
+      const data = childSnap.val(); latestMsg = data;
       const messageDiv = document.createElement('div');
       messageDiv.classList.add('message');
-       
-      let timeString = 'Just now';
-      if (data.createdAt) {
-        timeString = new Date(data.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-      }
-
-      let fileHtml = "";
-      if (data.file) {
-        if (data.file.type.startsWith("image/")) {
-          fileHtml = `<div class="attachment-container"><img src="${data.file.data}"></div>`;
-        } else if (data.file.type.startsWith("video/")) {
-          fileHtml = `<div class="attachment-container"><video controls src="${data.file.data}"></video></div>`;
-        } else if (data.file.type.startsWith("audio/")) {
-          fileHtml = `<div class="attachment-container"><audio controls src="${data.file.data}"></audio></div>`;
-        } else {
-          fileHtml = `<div class="attachment-container"><a href="${data.file.data}" download="${data.file.name}" class="download-link">Download ${data.file.name}</a></div>`;
-        }
-      }
-       
-      let badges = '';
-      if (data.username === 'thecoolwebsitemaker') {
-        badges += ' <span class="dev-badge" title="Web Developer">💻</span>';
-      }
-      if (data.isStaff) {
-        badges += ' <span class="staff-badge" title="Staff Member">🛡️</span>';
-      }
-
-      const visibleName = data.displayName || data.username;
-       
-      let replyHtml = "";
-      if (data.replyTo) {
-        const repliedName = data.replyTo.displayName || data.replyTo.username;
-        replyHtml = `
-          <div class="replied-message-block">
-            <span class="replied-author">Replying to ${repliedName}:</span> 
-            <span class="replied-text">${data.replyTo.text || "Attachment"}</span>
-          </div>
-        `;
-      }
-
-      let blockBtnHtml = "";
-      if (currentUserData.isStaff && !data.isStaff && data.username !== currentActiveUser) {
-        blockBtnHtml = `<button class="block-btn" data-username="${data.username}" style="background-color: red; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 2px 6px; font-size: 11px; margin-left: 5px;">Block from site</button>`;
-      }
-
-      let revokeStaffBtnHtml = "";
-      const canRevoke = (currentActiveUser === 'thecoolwebsitemaker' || currentActiveUser === 'spookso');
-      if (canRevoke && data.isStaff && data.username !== currentActiveUser && data.username !== 'thecoolwebsitemaker' && data.username !== 'spookso') {
-        revokeStaffBtnHtml = `<button class="revoke-staff-btn" data-username="${data.username}" style="background-color: #ff8800; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 2px 6px; font-size: 11px; margin-left: 5px;">Revoke Staff</button>`;
-      }
-
-      const safeText = data.text ? data.text.replace(/"/g, '&quot;') : '';
-      const safeDisp = data.displayName ? data.displayName.replace(/"/g, '&quot;') : '';
+      
+      let badges = (data.username === 'thecoolwebsitemaker') ? ' <span class="dev-badge">💻</span>' : '';
+      if (data.isStaff) badges += ' <span class="staff-badge">🛡️</span>';
 
       messageDiv.innerHTML = `
-        <img src="${data.pfp || DEFAULT_PFP}" class="msg-pfp" alt="PFP">
+        <img src="${data.pfp || DEFAULT_PFP}" class="msg-pfp">
         <div class="msg-content">
           <div class="message-header">
-            <span class="message-author" data-username="${data.username}">${visibleName}</span>${badges}
-            <span class="message-time">${timeString}</span>
-            <div class="message-actions">
-              <button class="reply-btn" data-username="${data.username}" data-displayname="${safeDisp}" data-text="${safeText}">Reply</button>
-              ${blockBtnHtml}
-              ${revokeStaffBtnHtml}
-            </div>
+            <span class="message-author">${data.displayName || data.username}</span>${badges}
           </div>
-          ${replyHtml}
           <div class="message-text">${data.text}</div>
-          ${fileHtml}
         </div>
       `;
-       
       messagesContainer.appendChild(messageDiv);
     });
 
-    // Trigger desktop notification for incoming messages/replies if page is loaded and message is new
     if (!isFirstLoad && latestMsg && latestMsg.username !== currentActiveUser) {
-      const isReplyToMe = latestMsg.replyTo && latestMsg.replyTo.username === currentActiveUser;
-      if (currentChannelType === 'dm' || isReplyToMe) {
-        const title = currentChannelType === 'dm' ? `New DM from @${latestMsg.username}` : `New reply from @${latestMsg.username}`;
-        showDesktopNotification(title, latestMsg.text || "sent an attachment");
-      }
+      showDesktopNotification(currentChannelType === 'dm' ? `New DM from @${latestMsg.username}` : `New message in ${currentChannel}`, latestMsg.text);
     }
-
     isFirstLoad = false;
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
   });
