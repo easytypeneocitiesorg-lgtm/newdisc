@@ -67,7 +67,7 @@ let currentChannelType = "text";
 let currentDMTarget = null;
 let isCurrentDMBlocked = false;
 let adminTargetUser = null;
-let adminTargetUserData = null; // Stored to easily check target privileges
+let adminTargetUserData = null;
 let announceTimeout = null;
 let attachedFileData = null;
 let currentReplyContext = null;
@@ -165,7 +165,7 @@ document.getElementById('login-btn').addEventListener('click', async (e) => {
   } catch (error) { authError.textContent = "Database error."; }
 });
 
-// SIGNUP LOGIC
+// SIGNUP LOGIC (Added 16 char limit check for username)
 document.getElementById('signup-btn').addEventListener('click', async (e) => {
   e.preventDefault();
   const username = usernameInput.value.trim().toLowerCase();
@@ -176,8 +176,12 @@ document.getElementById('signup-btn').addEventListener('click', async (e) => {
   const signupBtn = document.getElementById('signup-btn');
 
   if (ageGroup.classList.contains('hidden')) {
-    if (username.length < 3 || password.length < 4) {
-      authError.textContent = "Username > 3 chars, Password > 4 chars.";
+    if (username.length < 3 || username.length > 16) {
+      authError.textContent = "Username must be between 3 and 16 characters.";
+      return;
+    }
+    if (password.length < 4) {
+      authError.textContent = "Password must be at least 4 characters.";
       return;
     }
     authError.textContent = "Checking username...";
@@ -219,7 +223,7 @@ document.getElementById('logout-btn').addEventListener('click', () => {
   if (unsubscribeBlockStatus) { unsubscribeBlockStatus(); unsubscribeBlockStatus = null; }
 });
 
-// Profile Editing
+// Profile Editing (Added Display Name & Bio limits)
 document.getElementById('edit-profile-btn').addEventListener('click', () => {
   document.getElementById('display-name-input').value = currentUserData?.displayName || "";
   document.getElementById('bio-input').value = currentUserData?.bio || "";
@@ -233,6 +237,14 @@ document.getElementById('cancel-profile-btn').addEventListener('click', () => {
 document.getElementById('save-profile-btn').addEventListener('click', async () => {
   const newDisplayName = document.getElementById('display-name-input').value.trim();
   const newBio = document.getElementById('bio-input').value.trim();
+  
+  if (newDisplayName.length > 16) {
+    return alert("Display name cannot exceed 16 characters.");
+  }
+  if (newBio.length > 750) {
+    return alert("Bio cannot exceed 750 characters.");
+  }
+
   try {
     await update(ref(db, `users/${currentActiveUser}`), { displayName: newDisplayName, bio: newBio });
     document.getElementById('profile-modal').classList.add('hidden');
@@ -300,15 +312,12 @@ document.getElementById('admin-search-btn').addEventListener('click', async () =
   }
 });
 
-// Protected action checker helper
 function canPerformActionOnTarget() {
   if (!adminTargetUser) return false;
-  // Owner is fully protected from non-owners
   if (adminTargetUser === 'thecoolwebsitemaker' && currentActiveUser !== 'thecoolwebsitemaker') {
     alert("Action denied: You cannot target the site owner.");
     return false;
   }
-  // If the logged-in user is staff (and NOT owner), they cannot target the owner or other staff members
   if (currentActiveUser !== 'thecoolwebsitemaker') {
     if (adminTargetUser === 'thecoolwebsitemaker' || (adminTargetUserData && adminTargetUserData.isStaff)) {
       alert("Action denied: Staff members cannot mute, block, or wipe the owner or other staff members.");
@@ -352,7 +361,7 @@ document.getElementById('admin-revoke-btn').addEventListener('click', async () =
   alert(`Staff privileges revoked from @${adminTargetUser}.`);
 });
 
-// Owner Tools (Active & Used Code Separator)
+// Owner Tools
 async function loadGeneratedCodes() {
   const codesSelect = document.getElementById('generated-codes-select');
   codesSelect.innerHTML = '<option value="">-- Active & Used Codes --</option>';
@@ -394,7 +403,7 @@ document.getElementById('gen-unblock-code-btn').addEventListener('click', async 
   loadGeneratedCodes();
 });
 
-// DM Blocking (For everyone)
+// DM Blocking
 dmBlockToggleBtn.addEventListener('click', async () => {
   if(!currentDMTarget) return;
   if(isCurrentDMBlocked) {
@@ -419,9 +428,8 @@ function checkDMBlockStatus(targetUser) {
   });
 }
 
-// Global Message Actions (Replies, Blocks, Profiles)
+// Global Message Actions
 messagesContainer.addEventListener('click', async (e) => {
-  // View Profile
   if (e.target.classList.contains('message-author')) {
     const clickedUser = e.target.dataset.username;
     try {
@@ -434,7 +442,6 @@ messagesContainer.addEventListener('click', async (e) => {
     } catch(err) { console.error(err); }
   }
   
-  // Reply Feature
   if (e.target.classList.contains('reply-btn')) {
     currentReplyContext = {
       username: e.target.dataset.username,
@@ -447,14 +454,12 @@ messagesContainer.addEventListener('click', async (e) => {
     messageInput.focus();
   }
 
-  // Admin In-Chat Buttons (With Safety Checks)
   if (e.target.classList.contains('admin-block-btn')) {
     const targetUsername = e.target.dataset.username;
     if (targetUsername === 'thecoolwebsitemaker' && currentActiveUser !== 'thecoolwebsitemaker') {
       return alert("You cannot block the site owner.");
     }
     
-    // Check target's staff status before blocking from chat button
     const targetSnap = await get(child(dbRef, `users/${targetUsername}`));
     if (currentActiveUser !== 'thecoolwebsitemaker' && targetSnap.exists() && targetSnap.val().isStaff) {
       return alert("Staff members cannot block other staff members.");
@@ -534,7 +539,7 @@ function loadUserDMs() {
   });
 }
 
-// Channel Switching & Staff Code Redemption (Moves code from active to used)
+// Staff Code Redemption
 document.querySelectorAll('.channel[data-type="text"]').forEach(el => {
   el.addEventListener('click', async () => {
     const targetChannel = el.dataset.channel;
@@ -563,7 +568,7 @@ document.querySelectorAll('.channel[data-type="text"]').forEach(el => {
   });
 });
 
-// Unblock Code Redemption (Moves code from active to used)
+// Unblock Code Redemption
 document.getElementById('unblock-btn').addEventListener('click', async () => {
   const code = document.getElementById('unblock-code-input').value.trim();
   if (!code) return alert("Please enter an unblock code.");
@@ -668,12 +673,18 @@ document.getElementById('remove-file-btn').addEventListener('click', () => {
   filePreview.classList.add('hidden');
 });
 
-// Sending Messages
+// Sending Messages (Added 1,750 Character Limit Check)
 messageForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = messageInput.value.trim();
   if (text === "" && !attachedFileData) return;
   
+  if (text.length > 1750) {
+    chatError.textContent = "Message exceeds the 1,750 character limit.";
+    chatError.classList.remove('hidden');
+    return;
+  }
+
   // Rate Limiting
   const now = Date.now();
   if (now - lastMessageTime < 1000) {
