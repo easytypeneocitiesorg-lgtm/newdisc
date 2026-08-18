@@ -58,6 +58,8 @@ const cancelReplyBtn = document.getElementById('cancel-reply-btn');
 
 let unsubscribeMessages = null;
 let unsubscribeTyping = null;
+let unsubscribeUser = null;
+let unsubscribeBlockStatus = null;
 let currentActiveUser = null;
 let currentUserData = {};
 let currentChannel = "main";
@@ -85,7 +87,9 @@ const fileToBase64 = (file) => new Promise((resolve, reject) => {
 
 async function logUserIn(username) {
   currentActiveUser = username;
-  onValue(ref(db, `blocked_users/${username}`), (snap) => {
+  
+  if (unsubscribeBlockStatus) unsubscribeBlockStatus();
+  unsubscribeBlockStatus = onValue(ref(db, `blocked_users/${username}`), (snap) => {
     if (snap.exists() && snap.val() === true) {
       authScreen.classList.add('hidden'); chatScreen.classList.add('hidden'); blockedScreen.classList.remove('hidden');
     } else {
@@ -94,12 +98,18 @@ async function logUserIn(username) {
     }
   });
 
-  // Verify Account Integrity
-  onValue(ref(db, `users/${username}`), (snap) => {
-    if(!snap.exists() && currentActiveUser === username) {
-      alert("Your account state has changed or been wiped. Please log in again.");
+  // Verify Account Integrity (Handles Wipe Transitions seamlessly)
+  if (unsubscribeUser) unsubscribeUser();
+  unsubscribeUser = onValue(ref(db, `users/${username}`), (snap) => {
+    if (snap.exists() && snap.val().wipedTo) {
+      const newUsername = snap.val().wipedTo;
+      localStorage.setItem('obh_session', newUsername);
+      alert(`Your account has been wiped by staff. Your new username is @${newUsername}`);
+      logUserIn(newUsername); // Seamlessly transition them
+    } else if (!snap.exists() && currentActiveUser === username) {
+      alert("Your account state has changed. Please log in again.");
       document.getElementById('logout-btn').click();
-    } else {
+    } else if (snap.exists()) {
       currentUserData = snap.val();
       if(!currentUserData.pfp) currentUserData.pfp = DEFAULT_PFP;
       updateUIAfterLogin(username);
@@ -140,13 +150,21 @@ document.getElementById('login-btn').addEventListener('click', async (e) => {
 
   try {
     const snap = await get(child(dbRef, `users/${username}`));
-    if (snap.exists() && snap.val().password === password) {
-      localStorage.setItem('obh_session', username); authError.textContent = ''; logUserIn(username);
-    } else { authError.textContent = "Incorrect username or password."; }
+    if (snap.exists()) {
+      if (snap.val().wipedTo) {
+        authError.textContent = `This account was wiped. Try logging in as: ${snap.val().wipedTo}`;
+        return;
+      }
+      if (snap.val().password === password) {
+        localStorage.setItem('obh_session', username); authError.textContent = ''; logUserIn(username);
+        return;
+      }
+    }
+    authError.textContent = "Incorrect username or password.";
   } catch (error) { authError.textContent = "Database error."; }
 });
 
-// SIGNUP LOGIC - RESTORED
+// SIGNUP LOGIC
 document.getElementById('signup-btn').addEventListener('click', async (e) => {
   e.preventDefault();
   const username = usernameInput.value.trim().toLowerCase();
@@ -196,6 +214,8 @@ document.getElementById('logout-btn').addEventListener('click', () => {
   authScreen.classList.remove('hidden'); chatScreen.classList.add('hidden'); blockedScreen.classList.add('hidden');
   if (unsubscribeMessages) unsubscribeMessages();
   if (unsubscribeTyping) unsubscribeTyping();
+  if (unsubscribeUser) { unsubscribeUser(); unsubscribeUser = null; }
+  if (unsubscribeBlockStatus) { unsubscribeBlockStatus(); unsubscribeBlockStatus = null; }
 });
 
 // Profile Editing
@@ -235,7 +255,7 @@ openAdminBtn.addEventListener('click', async () => {
   staffSelect.innerHTML = '<option value="">-- View Current Staff --</option>';
   const snap = await get(child(dbRef, 'users'));
   snap.forEach(user => {
-    if(user.val().isStaff) staffSelect.innerHTML += `<option value="${user.key}">@${user.key} ${user.val().displayName ? `(${user.val().displayName})` : ''}</option>`;
+    if(user.val().isStaff && !user.val().wipedTo) staffSelect.innerHTML += `<option value="${user.key}">@${user.key} ${user.val().displayName ? `(${user.val().displayName})` : ''}</option>`;
   });
   if(currentActiveUser === 'thecoolwebsitemaker') loadGeneratedCodes();
 });
@@ -266,7 +286,7 @@ onValue(ref(db, 'global_events/announcement'), (snap) => {
 document.getElementById('admin-search-btn').addEventListener('click', async () => {
   const search = document.getElementById('admin-user-search').value.trim().toLowerCase();
   const snap = await get(child(dbRef, `users/${search}`));
-  if(snap.exists()) {
+  if(snap.exists() && !snap.val().wipedTo) {
     adminTargetUser = search;
     document.getElementById('target-user-display').textContent = `Target: @${search}`;
     document.getElementById('admin-user-actions').classList.remove('hidden');
@@ -289,8 +309,12 @@ document.getElementById('admin-wipe-btn').addEventListener('click', async () => 
   const rand = Math.random().toString(36).substring(2, 8);
   const newUname = 'user_' + rand;
   const oldData = (await get(child(dbRef, `users/${adminTargetUser}`))).val();
+  
+  // Migrate data to new user ID
   await set(ref(db, `users/${newUname}`), { ...oldData, displayName: "", bio: "", pfp: DEFAULT_PFP, isStaff: false });
-  await remove(ref(db, `users/${adminTargetUser}`));
+  // Leave a tombstone behind so the user auto-transitions instead of getting logged out
+  await set(ref(db, `users/${adminTargetUser}`), { wipedTo: newUname });
+  
   alert(`Account wiped. New username: ${newUname}`);
   document.getElementById('admin-user-actions').classList.add('hidden');
 });
@@ -416,6 +440,7 @@ dmSearchInput.addEventListener('input', async (e) => {
     let matches = 0;
     snap.forEach((userSnap) => {
       const uname = userSnap.key; const udata = userSnap.val();
+      if (udata.wipedTo) return; // Don't show wiped accounts
       if (uname !== currentActiveUser && (uname.includes(queryText) || (udata.displayName && udata.displayName.toLowerCase().includes(queryText)))) {
         matches++;
         const item = document.createElement('div');
@@ -478,6 +503,20 @@ document.querySelectorAll('.channel[data-type="text"]').forEach(el => {
     }
     switchChannel(targetChannel, 'text');
   });
+});
+
+document.getElementById('unblock-btn').addEventListener('click', async () => {
+  const code = document.getElementById('unblock-code-input').value.trim();
+  if (!code) return;
+  try {
+    const claimCheck = await get(child(dbRef, `generated_codes/unblock/${code}`));
+    if(!claimCheck.exists()) return alert("Invalid unblock code.");
+    if(claimCheck.val().usedBy) return alert("Code already used!");
+    
+    await update(ref(db, `generated_codes/unblock/${code}`), { usedBy: currentActiveUser });
+    await remove(ref(db, `blocked_users/${currentActiveUser}`));
+    alert("Successfully unblocked! Welcome back.");
+  } catch(err) { return alert("Error verifying code."); }
 });
 
 function switchChannel(channelName, type, extraData = null) {
