@@ -32,6 +32,13 @@ const currentUserSpan = document.getElementById('current-user');
 const messageForm = document.getElementById('message-form');
 const messageInput = document.getElementById('message-input');
 const messagesContainer = document.getElementById('messages-container');
+const fileUpload = document.getElementById('file-upload');
+const filePreview = document.getElementById('file-preview');
+const filePreviewName = document.getElementById('file-preview-name');
+const chatError = document.getElementById('chat-error');
+const typingIndicator = document.getElementById('typing-indicator');
+
+// Admin / Profile / Tools
 const dmSearchInput = document.getElementById('dm-search-input');
 const dmSearchResults = document.getElementById('dm-search-results');
 const dmChannelsList = document.getElementById('dm-channels-list');
@@ -44,8 +51,13 @@ const sendAnnounceBtn = document.getElementById('send-announce-btn');
 const announcementBanner = document.getElementById('announcement-banner');
 const announcementTextDisplay = document.getElementById('announcement-text');
 const dmBlockToggleBtn = document.getElementById('dm-block-toggle-btn');
+const replyBanner = document.getElementById('reply-banner');
+const replyToName = document.getElementById('reply-to-name');
+const replyToText = document.getElementById('reply-to-text');
+const cancelReplyBtn = document.getElementById('cancel-reply-btn');
 
 let unsubscribeMessages = null;
+let unsubscribeTyping = null;
 let currentActiveUser = null;
 let currentUserData = {};
 let currentChannel = "main";
@@ -54,11 +66,22 @@ let currentDMTarget = null;
 let isCurrentDMBlocked = false;
 let adminTargetUser = null;
 let announceTimeout = null;
+let attachedFileData = null;
+let currentReplyContext = null;
+let typingTimeout = null;
+let lastMessageTime = 0;
 
 if ("Notification" in window && Notification.permission !== "granted") Notification.requestPermission();
 function showDesktopNotification(title, body) {
   if ("Notification" in window && Notification.permission === "granted") new Notification(title, { body, icon: currentUserData.pfp || DEFAULT_PFP });
 }
+
+const fileToBase64 = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.readAsDataURL(file);
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = (error) => reject(error);
+});
 
 async function logUserIn(username) {
   currentActiveUser = username;
@@ -71,7 +94,7 @@ async function logUserIn(username) {
     }
   });
 
-  // Verify Account Integrity (for wipes)
+  // Verify Account Integrity
   onValue(ref(db, `users/${username}`), (snap) => {
     if(!snap.exists() && currentActiveUser === username) {
       alert("Your account state has changed or been wiped. Please log in again.");
@@ -89,8 +112,8 @@ async function logUserIn(username) {
 
 function updateUIAfterLogin(username) {
   currentPfpImg.src = currentUserData.pfp || DEFAULT_PFP;
-  let badges = (username === 'thecoolwebsitemaker') ? ' <span class="dev-badge">💻</span>' : '';
-  if (currentUserData.isStaff) badges += ' <span class="staff-badge">🛡️</span>';
+  let badges = (username === 'thecoolwebsitemaker') ? ' <span class="dev-badge" title="Web Developer">💻</span>' : '';
+  if (currentUserData.isStaff) badges += ' <span class="staff-badge" title="Staff">🛡️</span>';
   currentUserSpan.innerHTML = (currentUserData.displayName || username) + badges;
   
   if (currentUserData.isStaff || username === 'thecoolwebsitemaker') {
@@ -127,6 +150,37 @@ document.getElementById('logout-btn').addEventListener('click', () => {
   currentActiveUser = null; currentUserData = {};
   authScreen.classList.remove('hidden'); chatScreen.classList.add('hidden'); blockedScreen.classList.add('hidden');
   if (unsubscribeMessages) unsubscribeMessages();
+  if (unsubscribeTyping) unsubscribeTyping();
+});
+
+// Profile Editing
+document.getElementById('edit-profile-btn').addEventListener('click', () => {
+  document.getElementById('display-name-input').value = currentUserData?.displayName || "";
+  document.getElementById('bio-input').value = currentUserData?.bio || "";
+  document.getElementById('profile-modal').classList.remove('hidden');
+});
+
+document.getElementById('cancel-profile-btn').addEventListener('click', () => {
+  document.getElementById('profile-modal').classList.add('hidden');
+});
+
+document.getElementById('save-profile-btn').addEventListener('click', async () => {
+  const newDisplayName = document.getElementById('display-name-input').value.trim();
+  const newBio = document.getElementById('bio-input').value.trim();
+  try {
+    await update(ref(db, `users/${currentActiveUser}`), { displayName: newDisplayName, bio: newBio });
+    document.getElementById('profile-modal').classList.add('hidden');
+  } catch(err) { alert("Failed to save profile."); }
+});
+
+document.getElementById('pfp-upload').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file || !currentActiveUser) return;
+  if (file.size > MAX_FILE_SIZE) return alert("PFP must be under 5MB.");
+  try {
+    const base64 = await fileToBase64(file);
+    await update(ref(db, `users/${currentActiveUser}`), { pfp: base64 });
+  } catch (err) { console.error(err); }
 });
 
 // Admin Panel Logic
@@ -138,7 +192,6 @@ openAdminBtn.addEventListener('click', async () => {
   snap.forEach(user => {
     if(user.val().isStaff) staffSelect.innerHTML += `<option value="${user.key}">@${user.key} ${user.val().displayName ? `(${user.val().displayName})` : ''}</option>`;
   });
-  
   if(currentActiveUser === 'thecoolwebsitemaker') loadGeneratedCodes();
 });
 
@@ -188,11 +241,9 @@ document.getElementById('admin-mute-btn').addEventListener('click', async () => 
 document.getElementById('admin-wipe-btn').addEventListener('click', async () => {
   if(!adminTargetUser) return;
   if(!confirm(`Are you sure you want to wipe @${adminTargetUser}?`)) return;
-  
   const rand = Math.random().toString(36).substring(2, 8);
   const newUname = 'user_' + rand;
   const oldData = (await get(child(dbRef, `users/${adminTargetUser}`))).val();
-  
   await set(ref(db, `users/${newUname}`), { ...oldData, displayName: "", bio: "", pfp: DEFAULT_PFP, isStaff: false });
   await remove(ref(db, `users/${adminTargetUser}`));
   alert(`Account wiped. New username: ${newUname}`);
@@ -215,15 +266,10 @@ document.getElementById('admin-revoke-btn').addEventListener('click', async () =
 async function loadGeneratedCodes() {
   const codesSelect = document.getElementById('generated-codes-select');
   codesSelect.innerHTML = '<option value="">-- View Generated Codes --</option>';
-  
   const staffSnap = await get(child(dbRef, 'generated_codes/staff'));
-  if(staffSnap.exists()) {
-    staffSnap.forEach(c => codesSelect.innerHTML += `<option>[STAFF] ${c.key} - Used by: ${c.val().usedBy || 'UNUSED'}</option>`);
-  }
+  if(staffSnap.exists()) staffSnap.forEach(c => codesSelect.innerHTML += `<option>[STAFF] ${c.key} - Used by: ${c.val().usedBy || 'UNUSED'}</option>`);
   const unblockSnap = await get(child(dbRef, 'generated_codes/unblock'));
-  if(unblockSnap.exists()) {
-    unblockSnap.forEach(c => codesSelect.innerHTML += `<option>[UNBLOCK] ${c.key} - Used by: ${c.val().usedBy || 'UNUSED'}</option>`);
-  }
+  if(unblockSnap.exists()) unblockSnap.forEach(c => codesSelect.innerHTML += `<option>[UNBLOCK] ${c.key} - Used by: ${c.val().usedBy || 'UNUSED'}</option>`);
 }
 
 document.getElementById('gen-staff-code-btn').addEventListener('click', async () => {
@@ -243,26 +289,74 @@ dmBlockToggleBtn.addEventListener('click', async () => {
   if(!currentDMTarget) return;
   if(isCurrentDMBlocked) {
     await remove(ref(db, `user_dms_blocked/${currentActiveUser}/${currentDMTarget}`));
-    dmBlockToggleBtn.textContent = "Block User";
-    dmBlockToggleBtn.classList.remove('secondary-btn');
-    dmBlockToggleBtn.classList.add('danger-btn');
     isCurrentDMBlocked = false;
   } else {
     await set(ref(db, `user_dms_blocked/${currentActiveUser}/${currentDMTarget}`), true);
-    dmBlockToggleBtn.textContent = "Unblock User";
-    dmBlockToggleBtn.classList.remove('danger-btn');
-    dmBlockToggleBtn.classList.add('secondary-btn');
     isCurrentDMBlocked = true;
   }
+  updateDMBlockBtnUI();
 });
+
+function updateDMBlockBtnUI() {
+  dmBlockToggleBtn.textContent = isCurrentDMBlocked ? "Unblock User" : "Block User";
+  dmBlockToggleBtn.className = isCurrentDMBlocked ? "secondary-btn" : "danger-btn";
+}
 
 function checkDMBlockStatus(targetUser) {
   onValue(ref(db, `user_dms_blocked/${currentActiveUser}/${targetUser}`), (snap) => {
     isCurrentDMBlocked = (snap.exists() && snap.val() === true);
-    dmBlockToggleBtn.textContent = isCurrentDMBlocked ? "Unblock User" : "Block User";
-    dmBlockToggleBtn.className = isCurrentDMBlocked ? "secondary-btn" : "danger-btn";
+    updateDMBlockBtnUI();
   });
 }
+
+// Global Message Actions (Replies, Blocks, Profiles)
+messagesContainer.addEventListener('click', async (e) => {
+  // View Profile
+  if (e.target.classList.contains('message-author')) {
+    const clickedUser = e.target.dataset.username;
+    try {
+      const snap = await get(child(dbRef, `users/${clickedUser}`));
+      if(snap.exists()) {
+        const data = snap.val();
+        const disp = data.displayName ? ` (${data.displayName})` : '';
+        alert(`User: @${clickedUser}${disp}\nAge: ${data.age || 'Not set'}\nBio: ${data.bio || 'No bio written.'}`);
+      }
+    } catch(err) { console.error(err); }
+  }
+  
+  // Reply Feature
+  if (e.target.classList.contains('reply-btn')) {
+    currentReplyContext = {
+      username: e.target.dataset.username,
+      displayName: e.target.dataset.displayname,
+      text: e.target.dataset.text
+    };
+    replyToName.textContent = currentReplyContext.displayName || currentReplyContext.username;
+    replyToText.textContent = currentReplyContext.text || "Attachment";
+    replyBanner.classList.remove('hidden');
+    messageInput.focus();
+  }
+
+  // Admin In-Chat Buttons
+  if (e.target.classList.contains('admin-block-btn')) {
+    const targetUsername = e.target.dataset.username;
+    if (confirm(`Are you sure you want to block ${targetUsername} from the site?`)) {
+      await set(ref(db, `blocked_users/${targetUsername}`), true);
+    }
+  }
+
+  if (e.target.classList.contains('admin-revoke-btn')) {
+    const targetUsername = e.target.dataset.username;
+    if (confirm(`Revoke staff privileges from ${targetUsername}?`)) {
+      await update(ref(db, `users/${targetUsername}`), { isStaff: false });
+    }
+  }
+});
+
+cancelReplyBtn.addEventListener('click', () => {
+  currentReplyContext = null;
+  replyBanner.classList.add('hidden');
+});
 
 // DM Search
 dmSearchInput.addEventListener('input', async (e) => {
@@ -341,23 +435,11 @@ document.querySelectorAll('.channel[data-type="text"]').forEach(el => {
   });
 });
 
-document.getElementById('unblock-btn').addEventListener('click', async () => {
-  const code = document.getElementById('unblock-code-input').value.trim();
-  if (!code) return;
-  try {
-    const claimCheck = await get(child(dbRef, `generated_codes/unblock/${code}`));
-    if(!claimCheck.exists()) return alert("Invalid unblock code.");
-    if(claimCheck.val().usedBy) return alert("Code already used!");
-    
-    await update(ref(db, `generated_codes/unblock/${code}`), { usedBy: currentActiveUser });
-    await remove(ref(db, `blocked_users/${currentActiveUser}`));
-    alert("Successfully unblocked! Welcome back.");
-  } catch(err) { return alert("Error verifying code."); }
-});
-
 function switchChannel(channelName, type, extraData = null) {
   currentChannel = channelName; currentChannelType = type;
   document.querySelectorAll('.channel').forEach(c => c.classList.remove('active'));
+  const activeEl = document.querySelector(`.channel[data-channel="${channelName}"]`) || Array.from(document.querySelectorAll('.dm-channel')).find(el => el.dataset.channel === channelName);
+  if(activeEl) activeEl.classList.add('active');
   
   if (type === 'text') {
     document.getElementById('current-channel-title').textContent = channelName === 'main' ? "# main-chat" : "# staff-chat";
@@ -370,15 +452,86 @@ function switchChannel(channelName, type, extraData = null) {
     checkDMBlockStatus(extraData);
   }
   
+  currentReplyContext = null;
+  replyBanner.classList.add('hidden');
+  
   if (unsubscribeMessages) unsubscribeMessages();
+  if (unsubscribeTyping) unsubscribeTyping();
+  
   loadMessages();
+  listenToTyping();
 }
 
+// Typing Indicators
+messageInput.addEventListener('input', () => {
+  if (!currentActiveUser) return;
+  const typingRefKey = currentChannelType === 'text' ? `typing_text/${currentChannel}` : `typing_dm/${currentChannel}`;
+  set(ref(db, `${typingRefKey}/${currentActiveUser}`), true);
+  
+  clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(() => {
+    remove(ref(db, `${typingRefKey}/${currentActiveUser}`));
+  }, 1000);
+});
+
+function listenToTyping() {
+  const typingRefKey = currentChannelType === 'text' ? `typing_text/${currentChannel}` : `typing_dm/${currentChannel}`;
+  unsubscribeTyping = onValue(ref(db, typingRefKey), (snapshot) => {
+    const typers = [];
+    snapshot.forEach((childSnap) => {
+      if (childSnap.key !== currentActiveUser && childSnap.val() === true) typers.push(childSnap.key);
+    });
+
+    if (typers.length > 0) {
+      typingIndicator.textContent = typers.join(', ') + (typers.length > 1 ? " are typing..." : " is typing...");
+      typingIndicator.classList.remove('hidden');
+    } else {
+      typingIndicator.classList.add('hidden');
+    }
+  });
+}
+
+// File Attachments
+fileUpload.addEventListener('change', async (e) => {
+  chatError.classList.add('hidden');
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > MAX_FILE_SIZE) {
+    chatError.textContent = "File exceeds 5MB limit.";
+    chatError.classList.remove('hidden');
+    fileUpload.value = "";
+    return;
+  }
+  try {
+    const base64 = await fileToBase64(file);
+    attachedFileData = { name: file.name, type: file.type, data: base64 };
+    filePreviewName.textContent = file.name;
+    filePreview.classList.remove('hidden');
+  } catch (err) { console.error(err); }
+});
+
+document.getElementById('remove-file-btn').addEventListener('click', () => {
+  attachedFileData = null;
+  fileUpload.value = "";
+  filePreview.classList.add('hidden');
+});
+
+// Sending Messages
 messageForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = messageInput.value.trim();
-  if (!text) return;
+  if (text === "" && !attachedFileData) return;
   
+  // Rate Limiting
+  const now = Date.now();
+  if (now - lastMessageTime < 1000) {
+    chatError.textContent = "Wait a second before sending another message!";
+    chatError.classList.remove('hidden');
+    return;
+  }
+  chatError.classList.add('hidden');
+  lastMessageTime = now;
+
   // Mute Check
   if(currentUserData.mutedUntil && currentUserData.mutedUntil > Date.now()) {
     const minsLeft = Math.ceil((currentUserData.mutedUntil - Date.now()) / 60000);
@@ -400,10 +553,23 @@ messageForm.addEventListener('submit', async (e) => {
     pfp: currentUserData?.pfp || DEFAULT_PFP, isStaff: currentUserData?.isStaff || false, createdAt: serverTimestamp()
   };
 
+  if (attachedFileData) payload.file = attachedFileData;
+  if (currentReplyContext) payload.replyTo = currentReplyContext;
+
   messageInput.value = '';
+  attachedFileData = null;
+  fileUpload.value = "";
+  filePreview.classList.add('hidden');
+  currentReplyContext = null;
+  replyBanner.classList.add('hidden');
+
+  const typingRefKey = currentChannelType === 'text' ? `typing_text/${currentChannel}` : `typing_dm/${currentChannel}`;
+  remove(ref(db, `${typingRefKey}/${currentActiveUser}`));
+
   try { 
-    if (currentChannelType === 'text') { await push(ref(db, `messages_${currentChannel}`), payload); } 
-    else {
+    if (currentChannelType === 'text') { 
+      await push(ref(db, `messages_${currentChannel}`), payload); 
+    } else {
       await push(ref(db, `messages_dm_${currentChannel}`), payload);
       const parts = currentChannel.split('_');
       const otherUser = parts[0] === currentActiveUser ? parts[1] : parts[0];
@@ -412,34 +578,91 @@ messageForm.addEventListener('submit', async (e) => {
   } catch (error) { console.error(error); }
 });
 
+// Load & Render Messages
 function loadMessages() {
   const dbPath = currentChannelType === 'text' ? `messages_${currentChannel}` : `messages_dm_${currentChannel}`;
   let isFirstLoad = true;
   unsubscribeMessages = onValue(query(ref(db, dbPath), limitToLast(50)), (snapshot) => {
     messagesContainer.innerHTML = ''; 
     let latestMsg = null;
-    snapshot.forEach((childSnap) => {
-      const data = childSnap.val(); latestMsg = data;
+    snapshot.forEach((childSnapshot) => {
+      const data = childSnapshot.val(); latestMsg = data;
       const messageDiv = document.createElement('div');
       messageDiv.classList.add('message');
       
-      let badges = (data.username === 'thecoolwebsitemaker') ? ' <span class="dev-badge">💻</span>' : '';
-      if (data.isStaff) badges += ' <span class="staff-badge">🛡️</span>';
+      let timeString = 'Just now';
+      if (data.createdAt) {
+        timeString = new Date(data.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      }
+
+      let fileHtml = "";
+      if (data.file) {
+        if (data.file.type.startsWith("image/")) {
+          fileHtml = `<div class="attachment-container"><img src="${data.file.data}"></div>`;
+        } else if (data.file.type.startsWith("video/")) {
+          fileHtml = `<div class="attachment-container"><video controls src="${data.file.data}"></video></div>`;
+        } else if (data.file.type.startsWith("audio/")) {
+          fileHtml = `<div class="attachment-container"><audio controls src="${data.file.data}"></audio></div>`;
+        } else {
+          fileHtml = `<div class="attachment-container"><a href="${data.file.data}" download="${data.file.name}" class="download-link">Download ${data.file.name}</a></div>`;
+        }
+      }
+
+      let badges = (data.username === 'thecoolwebsitemaker') ? ' <span class="dev-badge" title="Web Developer">💻</span>' : '';
+      if (data.isStaff) badges += ' <span class="staff-badge" title="Staff">🛡️</span>';
+
+      const visibleName = data.displayName || data.username;
+
+      let replyHtml = "";
+      if (data.replyTo) {
+        const repliedName = data.replyTo.displayName || data.replyTo.username;
+        replyHtml = `
+          <div class="replied-message-block">
+            <span class="replied-author">Replying to ${repliedName}:</span> 
+            <span class="replied-text">${data.replyTo.text || "Attachment"}</span>
+          </div>
+        `;
+      }
+
+      let blockBtnHtml = "";
+      if (currentUserData.isStaff && !data.isStaff && data.username !== currentActiveUser) {
+        blockBtnHtml = `<button class="admin-block-btn danger-btn" data-username="${data.username}" style="padding: 2px 6px; font-size: 11px;">Block</button>`;
+      }
+
+      let revokeStaffBtnHtml = "";
+      const canRevoke = (currentActiveUser === 'thecoolwebsitemaker');
+      if (canRevoke && data.isStaff && data.username !== currentActiveUser && data.username !== 'thecoolwebsitemaker') {
+        revokeStaffBtnHtml = `<button class="admin-revoke-btn danger-btn" data-username="${data.username}" style="padding: 2px 6px; font-size: 11px; background-color: #f59e0b;">Revoke</button>`;
+      }
+
+      const safeText = data.text ? data.text.replace(/"/g, '&quot;') : '';
+      const safeDisp = data.displayName ? data.displayName.replace(/"/g, '&quot;') : '';
 
       messageDiv.innerHTML = `
-        <img src="${data.pfp || DEFAULT_PFP}" class="msg-pfp">
+        <img src="${data.pfp || DEFAULT_PFP}" class="msg-pfp" alt="PFP">
         <div class="msg-content">
           <div class="message-header">
-            <span class="message-author">${data.displayName || data.username}</span>${badges}
+            <span class="message-author" data-username="${data.username}">${visibleName}</span>${badges}
+            <span class="message-time">${timeString}</span>
+            <div class="message-actions">
+              <button class="reply-btn" data-username="${data.username}" data-displayname="${safeDisp}" data-text="${safeText}">Reply</button>
+              ${blockBtnHtml}
+              ${revokeStaffBtnHtml}
+            </div>
           </div>
+          ${replyHtml}
           <div class="message-text">${data.text}</div>
+          ${fileHtml}
         </div>
       `;
       messagesContainer.appendChild(messageDiv);
     });
 
     if (!isFirstLoad && latestMsg && latestMsg.username !== currentActiveUser) {
-      showDesktopNotification(currentChannelType === 'dm' ? `New DM from @${latestMsg.username}` : `New message in ${currentChannel}`, latestMsg.text);
+      const isReplyToMe = latestMsg.replyTo && latestMsg.replyTo.username === currentActiveUser;
+      if (currentChannelType === 'dm' || isReplyToMe) {
+        showDesktopNotification(currentChannelType === 'dm' ? `New DM from @${latestMsg.username}` : `New reply from @${latestMsg.username}`, latestMsg.text || "sent an attachment");
+      }
     }
     isFirstLoad = false;
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
