@@ -67,6 +67,7 @@ let currentChannelType = "text";
 let currentDMTarget = null;
 let isCurrentDMBlocked = false;
 let adminTargetUser = null;
+let adminTargetUserData = null; // Stored to easily check target privileges
 let announceTimeout = null;
 let attachedFileData = null;
 let currentReplyContext = null;
@@ -288,27 +289,48 @@ document.getElementById('admin-search-btn').addEventListener('click', async () =
   const snap = await get(child(dbRef, `users/${search}`));
   if(snap.exists() && !snap.val().wipedTo) {
     adminTargetUser = search;
+    adminTargetUserData = snap.val();
     document.getElementById('target-user-display').textContent = `Target: @${search}`;
     document.getElementById('admin-user-actions').classList.remove('hidden');
   } else {
     alert("User not found.");
+    adminTargetUser = null;
+    adminTargetUserData = null;
     document.getElementById('admin-user-actions').classList.add('hidden');
   }
 });
 
+// Protected action checker helper
+function canPerformActionOnTarget() {
+  if (!adminTargetUser) return false;
+  // Owner is fully protected from non-owners
+  if (adminTargetUser === 'thecoolwebsitemaker' && currentActiveUser !== 'thecoolwebsitemaker') {
+    alert("Action denied: You cannot target the site owner.");
+    return false;
+  }
+  // If the logged-in user is staff (and NOT owner), they cannot target the owner or other staff members
+  if (currentActiveUser !== 'thecoolwebsitemaker') {
+    if (adminTargetUser === 'thecoolwebsitemaker' || (adminTargetUserData && adminTargetUserData.isStaff)) {
+      alert("Action denied: Staff members cannot mute, block, or wipe the owner or other staff members.");
+      return false;
+    }
+  }
+  return true;
+}
+
 document.getElementById('admin-mute-btn').addEventListener('click', async () => {
   const mins = parseInt(document.getElementById('mute-duration').value);
-  if(!adminTargetUser || isNaN(mins)) return;
+  if(!canPerformActionOnTarget() || isNaN(mins)) return;
   await update(ref(db, `users/${adminTargetUser}`), { mutedUntil: Date.now() + (mins * 60000) });
   alert(`@${adminTargetUser} muted for ${mins} minutes.`);
 });
 
 document.getElementById('admin-wipe-btn').addEventListener('click', async () => {
-  if(!adminTargetUser) return;
+  if(!canPerformActionOnTarget()) return;
   if(!confirm(`Are you sure you want to wipe @${adminTargetUser}?`)) return;
   const rand = Math.random().toString(36).substring(2, 8);
   const newUname = 'user_' + rand;
-  const oldData = (await get(child(dbRef, `users/${adminTargetUser}`))).val();
+  const oldData = adminTargetUserData;
   
   await set(ref(db, `users/${newUname}`), { ...oldData, displayName: "", bio: "", pfp: DEFAULT_PFP, isStaff: false });
   await set(ref(db, `users/${adminTargetUser}`), { wipedTo: newUname });
@@ -318,13 +340,14 @@ document.getElementById('admin-wipe-btn').addEventListener('click', async () => 
 });
 
 document.getElementById('admin-block-btn').addEventListener('click', async () => {
-  if(!adminTargetUser) return;
+  if(!canPerformActionOnTarget()) return;
   await set(ref(db, `blocked_users/${adminTargetUser}`), true);
   alert(`@${adminTargetUser} blocked from the site.`);
 });
 
 document.getElementById('admin-revoke-btn').addEventListener('click', async () => {
   if(!adminTargetUser || currentActiveUser !== 'thecoolwebsitemaker') return;
+  if(adminTargetUser === 'thecoolwebsitemaker') return alert("You cannot revoke the owner's privileges.");
   await update(ref(db, `users/${adminTargetUser}`), { isStaff: false });
   alert(`Staff privileges revoked from @${adminTargetUser}.`);
 });
@@ -334,7 +357,6 @@ async function loadGeneratedCodes() {
   const codesSelect = document.getElementById('generated-codes-select');
   codesSelect.innerHTML = '<option value="">-- Active & Used Codes --</option>';
   
-  // Load Active Staff Codes
   const activeStaffSnap = await get(child(dbRef, 'generated_codes/active/staff'));
   if(activeStaffSnap.exists()) {
     activeStaffSnap.forEach(c => {
@@ -342,7 +364,6 @@ async function loadGeneratedCodes() {
     });
   }
   
-  // Load Active Unblock Codes
   const activeUnblockSnap = await get(child(dbRef, 'generated_codes/active/unblock'));
   if(activeUnblockSnap.exists()) {
     activeUnblockSnap.forEach(c => {
@@ -350,7 +371,6 @@ async function loadGeneratedCodes() {
     });
   }
 
-  // Load Used Codes History
   const usedSnap = await get(child(dbRef, 'generated_codes/used'));
   if(usedSnap.exists()) {
     usedSnap.forEach(c => {
@@ -427,9 +447,19 @@ messagesContainer.addEventListener('click', async (e) => {
     messageInput.focus();
   }
 
-  // Admin In-Chat Buttons
+  // Admin In-Chat Buttons (With Safety Checks)
   if (e.target.classList.contains('admin-block-btn')) {
     const targetUsername = e.target.dataset.username;
+    if (targetUsername === 'thecoolwebsitemaker' && currentActiveUser !== 'thecoolwebsitemaker') {
+      return alert("You cannot block the site owner.");
+    }
+    
+    // Check target's staff status before blocking from chat button
+    const targetSnap = await get(child(dbRef, `users/${targetUsername}`));
+    if (currentActiveUser !== 'thecoolwebsitemaker' && targetSnap.exists() && targetSnap.val().isStaff) {
+      return alert("Staff members cannot block other staff members.");
+    }
+
     if (confirm(`Are you sure you want to block ${targetUsername} from the site?`)) {
       await set(ref(db, `blocked_users/${targetUsername}`), true);
     }
@@ -437,6 +467,7 @@ messagesContainer.addEventListener('click', async (e) => {
 
   if (e.target.classList.contains('admin-revoke-btn')) {
     const targetUsername = e.target.dataset.username;
+    if (targetUsername === 'thecoolwebsitemaker') return alert("You cannot revoke the owner's privileges.");
     if (confirm(`Revoke staff privileges from ${targetUsername}?`)) {
       await update(ref(db, `users/${targetUsername}`), { isStaff: false });
     }
@@ -516,7 +547,6 @@ document.querySelectorAll('.channel[data-type="text"]').forEach(el => {
         const claimCheck = await get(child(dbRef, `generated_codes/active/staff/${code}`));
         if(!claimCheck.exists()) return alert("Invalid staff code.");
         
-        // Remove from active & register under used codes
         const updates = {};
         updates[`generated_codes/active/staff/${code}`] = null;
         updates[`generated_codes/used/${code}`] = { usedBy: currentActiveUser, type: 'staff', usedAt: serverTimestamp() };
@@ -542,7 +572,6 @@ document.getElementById('unblock-btn').addEventListener('click', async () => {
     const claimCheck = await get(child(dbRef, `generated_codes/active/unblock/${code}`));
     if(!claimCheck.exists()) return alert("Invalid unblock code.");
     
-    // Remove from active & register under used codes
     const updates = {};
     updates[`generated_codes/active/unblock/${code}`] = null;
     updates[`generated_codes/used/${code}`] = { usedBy: currentActiveUser, type: 'unblock', usedAt: serverTimestamp() };
