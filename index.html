@@ -135,29 +135,21 @@
         <h2>The New Discord</h2>
         <div class="channels">
           <div class="channel-category">TEXT CHANNELS</div>
-          <div class="channel active" data-channel="main"># main-chat</div>
-          <div class="channel" data-channel="staff"># staff-chat 🛡️</div>
+          <div class="channel active" data-channel="main" data-type="text"># main-chat</div>
+          <div class="channel" data-channel="staff" data-type="text"># staff-chat 🛡️</div>
           
-          <div class="channel-category" style="margin-top: 15px;">VOICE CHANNELS</div>
-          <div class="channel vc-channel" data-channel="general-vc">🔊 General VC</div>
-          <div id="vc-users-list" class="vc-users-container hidden">
-            <!-- Connected VC users populate here -->
+          <div class="channel-category" style="margin-top: 15px;">DIRECT MESSAGES</div>
+          <div class="dm-search-container">
+            <input type="text" id="dm-search-input" placeholder="Find or start a DM..." autocomplete="off">
+            <div id="dm-search-results" class="dm-search-results hidden"></div>
+          </div>
+          <div id="dm-channels-list" class="dm-channels-list">
+            <!-- Saved DMs populate here -->
           </div>
         </div>
       </div>
       
       <div class="user-panel">
-        <div id="vc-connected-bar" class="vc-status-bar hidden">
-          <div class="vc-status-info">
-            <span class="vc-connected-icon">🔊</span>
-            <div>
-              <div class="vc-status-text">Voice Connected</div>
-              <div id="vc-current-room" class="vc-room-name">General VC</div>
-            </div>
-          </div>
-          <button id="vc-disconnect-btn" title="Disconnect">Disconnect</button>
-        </div>
-
         <div class="user-profile-wrapper">
           <label for="pfp-upload" class="pfp-label" title="Click to change profile picture">
             <img id="current-pfp" src="" alt="Profile">
