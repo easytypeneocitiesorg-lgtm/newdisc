@@ -3,35 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
-  <!-- Camouflage Title and Metadata -->
   <title>Algebra 1 Practice & Interactive Lessons</title>
-  <meta name="description" content="Master algebra with our interactive lessons, step-by-step tutorials, and practice problems for students of all levels.">
-  <meta name="keywords" content="algebra, math practice, linear equations, polynomials, homework help, interactive math">
-  <meta name="author" content="Math Learning Foundation">
-  
-  <!-- Math-themed favicon -->
   <link rel="icon" type="image/png" href="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Math_symbol_x.svg/32px-Math_symbol_x.svg.png" />
-  
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-  <div id="announcement-banner" class="hidden">
-    <span id="announcement-text"></span>
-  </div>
+  <div id="announcement-banner" class="hidden"><span id="announcement-text"></span></div>
 
   <div id="auth-screen" class="screen">
     <div class="auth-box glass-panel">
       <h1>The New Discord</h1>
       <p>Welcome back! Let's get you signed in.</p>
-      
       <form id="auth-form">
         <div id="login-fields">
           <input type="text" id="username" placeholder="Username" required autocomplete="off">
           <input type="password" id="password" placeholder="Password" required>
         </div>
-        
         <div id="age-group" class="hidden">
           <label style="color: var(--text-normal); font-weight: 500; margin-bottom: 5px; display:block; text-align: left; font-size: 14px;">Select your age:</label>
           <select id="age-select">
@@ -42,7 +29,6 @@
             <option value="21+">21+</option>
           </select>
         </div>
-        
         <div class="auth-buttons">
           <button type="button" id="login-btn" class="primary-btn">Log In</button>
           <button type="button" id="signup-btn" class="secondary-btn">Create Account</button>
@@ -54,11 +40,8 @@
 
   <div id="blocked-screen" class="screen hidden">
     <div class="blocked-box glass-panel">
-      <h1>You have been blocked by a staff member.</h1>
-      <p>Apply to get an unblock code at <a href="https://discord.gg/wZNGASwP3Y" target="_blank">our server</a>.</p>
-      <input type="text" id="unblock-code-input" placeholder="Enter unblock code..." autocomplete="off">
-      <br>
-      <button id="unblock-btn" class="primary-btn" style="margin-top:10px;">Unblock</button>
+      <h1>You have been blocked from the site.</h1>
+      <p>If you believe this is an error, please contact the owner.</p>
     </div>
   </div>
 
@@ -88,7 +71,7 @@
           <option value="15">15 Seconds</option>
           <option value="20">20 Seconds</option>
         </select>
-        <button id="send-announce-btn" class="primary-btn">Broadcast</button>
+        <button id="send-announce-btn" class="primary-btn" style="margin-top: 5px;">Broadcast</button>
       </div>
 
       <div class="admin-section">
@@ -99,13 +82,26 @@
         </div>
         <div id="admin-user-actions" class="hidden" style="margin-top:10px; display:flex; flex-direction:column; gap:5px;">
           <span id="target-user-display" style="font-weight:bold; color:var(--accent);"></span>
+          
           <div style="display:flex; gap:5px;">
-            <input type="number" id="mute-duration" placeholder="Minutes" style="width:80px;">
-            <button id="admin-mute-btn" class="secondary-btn">Mute</button>
+            <input type="number" id="mute-duration" placeholder="Mins" style="width:70px;">
+            <button id="admin-mute-btn" class="secondary-btn" style="flex:1;">Mute</button>
           </div>
           <button id="admin-wipe-btn" class="danger-btn">Wipe Account</button>
           <button id="admin-block-btn" class="danger-btn">Block From Site</button>
-          <button id="admin-revoke-btn" class="danger-btn hidden">Revoke Staff (Owner Only)</button>
+          
+          <!-- Owner Only Tools -->
+          <div id="owner-action-btns" class="hidden" style="display:flex; flex-direction:column; gap:5px; margin-top:5px; padding-top:10px; border-top:1px solid var(--panel-border);">
+            <span style="font-size:12px; color:var(--text-muted);">Owner Actions:</span>
+            <div style="display:flex; gap:5px;">
+              <button id="admin-grant-staff-btn" class="primary-btn" style="flex:1; background-color:var(--success);">+ Staff</button>
+              <button id="admin-grant-helper-btn" class="primary-btn" style="flex:1; background-color:#3b82f6;">+ Helper</button>
+            </div>
+            <div style="display:flex; gap:5px;">
+              <button id="admin-revoke-btn" class="danger-btn" style="flex:1;">Revoke Roles</button>
+              <button id="admin-unblock-btn" class="secondary-btn" style="flex:1;">Unblock</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -116,18 +112,17 @@
         </select>
       </div>
 
-      <div id="owner-tools" class="admin-section hidden">
-        <h4 style="color:var(--accent-hover);">Owner Tools</h4>
-        <div style="display:flex; gap:5px; margin-bottom:5px;">
-          <button id="gen-staff-code-btn" class="primary-btn">Gen Staff Code</button>
-          <button id="gen-unblock-code-btn" class="primary-btn">Gen Unblock Code</button>
-        </div>
-        <select id="generated-codes-select">
-          <option value="">-- View Generated Codes --</option>
-        </select>
-      </div>
-
       <button id="close-admin-btn" class="secondary-btn" style="margin-top:10px;">Close Admin Menu</button>
+    </div>
+  </div>
+
+  <div id="block-req-modal" class="modal hidden">
+    <div class="modal-content glass-panel admin-panel">
+      <h3>Helper Block Requests</h3>
+      <div id="block-requests-list" style="margin-top: 10px; display: flex; flex-direction: column; gap: 10px;">
+        <p>No active requests.</p>
+      </div>
+      <button id="close-req-btn" class="secondary-btn" style="margin-top:10px;">Close</button>
     </div>
   </div>
 
@@ -137,7 +132,9 @@
         <h2>The New Discord</h2>
         <div class="channels">
           <div class="channel-category">TEXT CHANNELS</div>
+          <div class="channel" data-channel="rules" data-type="text"># rules 📜</div>
           <div class="channel active" data-channel="main" data-type="text"># main-chat</div>
+          <div class="channel" data-channel="off-topic" data-type="text"># off-topic</div>
           <div class="channel" data-channel="staff" data-type="text"># staff-chat 🛡️</div>
           
           <div class="channel-category" style="margin-top: 15px;">DIRECT MESSAGES</div>
@@ -145,8 +142,7 @@
             <input type="text" id="dm-search-input" placeholder="Find or start a DM..." autocomplete="off">
             <div id="dm-search-results" class="dm-search-results hidden"></div>
           </div>
-          <div id="dm-channels-list" class="dm-channels-list">
-            </div>
+          <div id="dm-channels-list" class="dm-channels-list"></div>
         </div>
       </div>
       
@@ -169,16 +165,18 @@
     <div class="chat-area">
       <div class="chat-header glass-panel">
         <h3 id="current-channel-title"># main-chat</h3>
-        <div style="margin-left: auto; display: flex; gap: 10px;">
+        <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
           <button id="dm-block-toggle-btn" class="danger-btn hidden" style="padding: 4px 10px; font-size: 12px;">Block User</button>
+          <button id="open-block-req-btn" class="secondary-btn hidden" style="padding: 4px 10px; font-size: 12px; position: relative;">
+            Block Requests <span id="req-badge" class="badge hidden"></span>
+          </button>
           <button id="open-admin-btn" class="primary-btn hidden" style="padding: 4px 10px; font-size: 12px;">🛡️ Admin Menu</button>
         </div>
       </div>
       
-      <div id="messages-container" class="messages-container">
-        </div>
+      <div id="messages-container" class="messages-container"></div>
       
-      <div class="input-container glass-panel">
+      <div class="input-container glass-panel" id="main-input-container">
         <div id="reply-banner" class="hidden">
           <span>Replying to <strong id="reply-to-name"></strong>: <span id="reply-to-text"></span></span>
           <button type="button" id="cancel-reply-btn">X</button>
@@ -199,11 +197,6 @@
       </div>
     </div>
   </div>
-
-  <div id="cheddar-overlay" class="hidden">
-    <img src="cheddarandbbqwavy.png" alt="Cheddar and BBQ Wavy">
-  </div>
-  <audio id="cheddar-audio" src="cheddarandbbqwavy.mp3" loop></audio>
 
   <script type="module" src="app.js"></script>
 </body>
