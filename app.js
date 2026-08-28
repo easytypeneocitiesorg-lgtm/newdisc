@@ -1,833 +1,589 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { 
-  getDatabase, ref, push, onValue, serverTimestamp, get, child, set, update, remove, query, limitToLast
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
+import { getDatabase, ref, set, get, push, update, remove, onValue, onChildAdded, onChildChanged, onChildRemoved, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-database.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAyR3YYB0BP9wNOsBc7Kcs57KbJcbTpRTo",
-  authDomain: "thenewdiscisdead.firebaseapp.com",
-  projectId: "thenewdiscisdead",
-  storageBucket: "thenewdiscisdead.firebasestorage.app",
-  messagingSenderId: "1031346102402",
-  appId: "1:1031346102402:web:7fae429231e82fa78d149b",
-  measurementId: "G-Q1K6WTG06F"
+  apiKey: "AIzaSyBrFFktufCayJJyiW7owlPQbIWKM1zBbOk",
+  authDomain: "learnalgebramaximus.firebaseapp.com",
+  databaseURL: "https://learnalgebramaximus-default-rtdb.firebaseio.com",
+  projectId: "learnalgebramaximus",
+  storageBucket: "learnalgebramaximus.firebasestorage.app",
+  messagingSenderId: "581042253297",
+  appId: "1:581042253297:web:a1ac31330f78b8e4c76850",
+  measurementId: "G-D7D4G9VE8R"
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getDatabase(app); 
-const dbRef = ref(db);
+const db = getDatabase(app);
 
-const DEFAULT_PFP = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23999'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z'/%3E%3C/svg%3E";
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
+// ==========================================
+// 2. STATE & DOM ELEMENTS
+// ==========================================
+let currentUser = null;
+let currentChannel = localStorage.getItem('lastChannel') || 'general';
+let replyingToId = null;
+let editingMsgId = null;
+let msgListeners = [];
 
-// DOM
-const authScreen = document.getElementById('auth-screen');
-const chatScreen = document.getElementById('chat-screen');
-const blockedScreen = document.getElementById('blocked-screen');
-const usernameInput = document.getElementById('username'); 
-const passwordInput = document.getElementById('password');
-const authError = document.getElementById('auth-error');
-const currentPfpImg = document.getElementById('current-pfp');
-const currentUserSpan = document.getElementById('current-user');
-const messageForm = document.getElementById('message-form');
-const messageInput = document.getElementById('message-input');
-const messagesContainer = document.getElementById('messages-container');
-const fileUpload = document.getElementById('file-upload');
-const filePreview = document.getElementById('file-preview');
-const filePreviewName = document.getElementById('file-preview-name');
-const chatError = document.getElementById('chat-error');
-const typingIndicator = document.getElementById('typing-indicator');
+const defaultAvatar = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2NjYyI+PHBhdGggZD0iTTEyIDJDMi40OCAyIC0uMDEgNi40OC0uMDEgMTJzNC40OSAxMCAxMC4wMSAxMGM1LjUyIDAgMTAtNC40OCAxMC0xMFMyMC41MiAyIDEyIDJ6bTAgM2MxLjY2IDAgMyAxLjM0IDMgM3MtMS4zNCAzLTMgMy0zLTEuMzQtMy0zIDEuMzQtMyAzLTN6bTAgMTQuMmMtMi41IDAtNC43MS0xLjI4LTYtMy4yMi4wMy0xLjk5IDQtMy4wOCA2LTMuMDhzNS45NyAxLjA5IDYgMy4wOGMtMS4yOSAxLjk0LTMuNSAzLjIyLTYgMy4yMnoiLz48L3N2Zz4=";
 
-// Admin / Profile / Tools
-const dmSearchInput = document.getElementById('dm-search-input');
-const dmSearchResults = document.getElementById('dm-search-results');
-const dmChannelsList = document.getElementById('dm-channels-list');
-const openAdminBtn = document.getElementById('open-admin-btn');
-const adminModal = document.getElementById('admin-modal');
-const closeAdminBtn = document.getElementById('close-admin-btn');
-const announceText = document.getElementById('announce-text');
-const announceDuration = document.getElementById('announce-duration');
-const sendAnnounceBtn = document.getElementById('send-announce-btn');
-const announcementBanner = document.getElementById('announcement-banner');
-const announcementTextDisplay = document.getElementById('announcement-text');
-const dmBlockToggleBtn = document.getElementById('dm-block-toggle-btn');
-const replyBanner = document.getElementById('reply-banner');
-const replyToName = document.getElementById('reply-to-name');
-const replyToText = document.getElementById('reply-to-text');
-const cancelReplyBtn = document.getElementById('cancel-reply-btn');
+const el = (id) => document.getElementById(id);
+const screens = { auth: el('auth-screen'), app: el('app-screen'), blocked: el('blocked-screen') };
 
-let unsubscribeMessages = null;
-let unsubscribeTyping = null;
-let unsubscribeUser = null;
-let unsubscribeBlockStatus = null;
-let currentActiveUser = null;
-let currentUserData = {};
-let currentChannel = "main";
-let currentChannelType = "text"; 
-let currentDMTarget = null;
-let isCurrentDMBlocked = false;
-let adminTargetUser = null;
-let adminTargetUserData = null;
-let announceTimeout = null;
-let attachedFileData = null;
-let currentReplyContext = null;
-let typingTimeout = null;
-let lastMessageTime = 0;
-
-if ("Notification" in window && Notification.permission !== "granted") Notification.requestPermission();
-function showDesktopNotification(title, body) {
-  if ("Notification" in window && Notification.permission === "granted") new Notification(title, { body, icon: currentUserData.pfp || DEFAULT_PFP });
+// ==========================================
+// 3. UTILITIES & SECURITY (Web Crypto)
+// ==========================================
+async function hashPassword(password) {
+    const msgBuffer = new TextEncoder().encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-const fileToBase64 = (file) => new Promise((resolve, reject) => {
-  const reader = new FileReader();
-  reader.readAsDataURL(file);
-  reader.onload = () => resolve(reader.result);
-  reader.onerror = (error) => reject(error);
-});
-
-async function logUserIn(username) {
-  currentActiveUser = username;
-  
-  if (unsubscribeBlockStatus) unsubscribeBlockStatus();
-  unsubscribeBlockStatus = onValue(ref(db, `blocked_users/${username}`), (snap) => {
-    if (snap.exists() && snap.val() === true) {
-      authScreen.classList.add('hidden'); chatScreen.classList.add('hidden'); blockedScreen.classList.remove('hidden');
-    } else {
-      blockedScreen.classList.add('hidden');
-      if (currentActiveUser) { authScreen.classList.add('hidden'); chatScreen.classList.remove('hidden'); }
-    }
-  });
-
-  // Verify Account Integrity (Handles Wipe Transitions seamlessly)
-  if (unsubscribeUser) unsubscribeUser();
-  unsubscribeUser = onValue(ref(db, `users/${username}`), (snap) => {
-    if (snap.exists() && snap.val().wipedTo) {
-      const newUsername = snap.val().wipedTo;
-      localStorage.setItem('obh_session', newUsername);
-      alert(`Your account has been wiped by staff. Your new username is @${newUsername}`);
-      logUserIn(newUsername);
-    } else if (!snap.exists() && currentActiveUser === username) {
-      alert("Your account state has changed. Please log in again.");
-      document.getElementById('logout-btn').click();
-    } else if (snap.exists()) {
-      currentUserData = snap.val();
-      if(!currentUserData.pfp) currentUserData.pfp = DEFAULT_PFP;
-      updateUIAfterLogin(username);
-    }
-  });
-
-  loadUserDMs();
-  switchChannel('main', 'text');
+function showToast(msg) {
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerText = msg;
+    el('toast-container').appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
 }
 
-function updateUIAfterLogin(username) {
-  currentPfpImg.src = currentUserData.pfp || DEFAULT_PFP;
-  let badges = (username === 'thecoolwebsitemaker') ? ' <span class="dev-badge" title="Web Developer">💻</span>' : '';
-  if (currentUserData.isStaff) badges += ' <span class="staff-badge" title="Staff">🛡️</span>';
-  currentUserSpan.innerHTML = (currentUserData.displayName || username) + badges;
-  
-  if (currentUserData.isStaff || username === 'thecoolwebsitemaker') {
-    openAdminBtn.classList.remove('hidden');
-    if (username === 'thecoolwebsitemaker') {
-      document.getElementById('owner-tools').classList.remove('hidden');
-      document.getElementById('admin-revoke-btn').classList.remove('hidden');
-    }
-  } else {
-    openAdminBtn.classList.add('hidden');
-  }
+function sanitize(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
 }
 
-const savedSession = localStorage.getItem('obh_session');
-if (savedSession) logUserIn(savedSession);
+// ==========================================
+// 4. AUTHENTICATION & SESSION
+// ==========================================
+let isLoginMode = true;
 
-// LOGIN LOGIC
-document.getElementById('login-btn').addEventListener('click', async (e) => {
-  e.preventDefault();
-  authError.textContent = 'Checking...';
-  const username = usernameInput.value.trim().toLowerCase();
-  const password = passwordInput.value;
-  if (!username || !password) return (authError.textContent = "Enter both fields.");
+el('auth-toggle-link').onclick = (e) => {
+    e.preventDefault();
+    isLoginMode = !isLoginMode;
+    el('auth-header').innerText = isLoginMode ? "Log In" : "Create Account";
+    el('auth-action-btn').innerText = isLoginMode ? "Log In" : "Sign Up";
+    el('auth-toggle-text').innerText = isLoginMode ? "Need an account?" : "Already have an account?";
+    el('auth-error').innerText = "";
+};
 
-  try {
-    const snap = await get(child(dbRef, `users/${username}`));
-    if (snap.exists()) {
-      if (snap.val().wipedTo) {
-        authError.textContent = `This account was wiped. Try logging in as: ${snap.val().wipedTo}`;
-        return;
-      }
-      if (snap.val().password === password) {
-        localStorage.setItem('obh_session', username); authError.textContent = ''; logUserIn(username);
-        return;
-      }
-    }
-    authError.textContent = "Incorrect username or password.";
-  } catch (error) { authError.textContent = "Database error."; }
-});
+el('auth-action-btn').onclick = async () => {
+    const userRaw = el('auth-username').value.trim();
+    const passRaw = el('auth-password').value;
+    const errorEl = el('auth-error');
+    
+    if(!/^[A-Za-z0-9_]{3,16}$/.test(userRaw)) return errorEl.innerText = "Username must be 3-16 chars (letters, numbers, _).";
+    if(passRaw.length < 6) return errorEl.innerText = "Password too short.";
 
-// SIGNUP LOGIC (Added 16 char limit check for username)
-document.getElementById('signup-btn').addEventListener('click', async (e) => {
-  e.preventDefault();
-  const username = usernameInput.value.trim().toLowerCase();
-  const password = passwordInput.value;
-  const ageGroup = document.getElementById('age-group');
-  const loginFields = document.getElementById('login-fields');
-  const loginBtn = document.getElementById('login-btn');
-  const signupBtn = document.getElementById('signup-btn');
+    const userNorm = userRaw.toLowerCase();
+    const pHash = await hashPassword(passRaw);
+    
+    el('auth-action-btn').disabled = true;
+    errorEl.innerText = "Processing...";
 
-  if (ageGroup.classList.contains('hidden')) {
-    if (username.length < 3 || username.length > 16) {
-      authError.textContent = "Username must be between 3 and 16 characters.";
-      return;
-    }
-    if (password.length < 4) {
-      authError.textContent = "Password must be at least 4 characters.";
-      return;
-    }
-    authError.textContent = "Checking username...";
     try {
-      const snapshot = await get(child(dbRef, `users/${username}`));
-      if (snapshot.exists()) return (authError.textContent = "Username taken.");
-      authError.textContent = "";
-      loginFields.classList.add('hidden');
-      loginBtn.classList.add('hidden');
-      ageGroup.classList.remove('hidden');
-      signupBtn.textContent = "Complete Account";
-    } catch (e) { authError.textContent = "Database error."; }
-  } else {
-    authError.textContent = "Creating account...";
-    const age = document.getElementById('age-select').value;
-    try {
-      await set(ref(db, `users/${username}`), { 
-        password, pfp: DEFAULT_PFP, age, isStaff: false, displayName: "", bio: "", createdAt: serverTimestamp() 
-      });
-      localStorage.setItem('obh_session', username);
-      authError.textContent = '';
-      logUserIn(username);
-      
-      loginFields.classList.remove('hidden');
-      loginBtn.classList.remove('hidden');
-      ageGroup.classList.add('hidden');
-      signupBtn.textContent = "Create Account";
-    } catch (error) { authError.textContent = "Database error."; }
-  }
-});
+        const unRef = ref(db, `usernames/${userNorm}`);
+        const unSnap = await get(unRef);
 
-document.getElementById('logout-btn').addEventListener('click', () => {
-  localStorage.removeItem('obh_session');
-  currentActiveUser = null; currentUserData = {};
-  authScreen.classList.remove('hidden'); chatScreen.classList.add('hidden'); blockedScreen.classList.add('hidden');
-  if (unsubscribeMessages) unsubscribeMessages();
-  if (unsubscribeTyping) unsubscribeTyping();
-  if (unsubscribeUser) { unsubscribeUser(); unsubscribeUser = null; }
-  if (unsubscribeBlockStatus) { unsubscribeBlockStatus(); unsubscribeBlockStatus = null; }
-});
-
-// Profile Editing (Added Display Name & Bio limits)
-document.getElementById('edit-profile-btn').addEventListener('click', () => {
-  document.getElementById('display-name-input').value = currentUserData?.displayName || "";
-  document.getElementById('bio-input').value = currentUserData?.bio || "";
-  document.getElementById('profile-modal').classList.remove('hidden');
-});
-
-document.getElementById('cancel-profile-btn').addEventListener('click', () => {
-  document.getElementById('profile-modal').classList.add('hidden');
-});
-
-document.getElementById('save-profile-btn').addEventListener('click', async () => {
-  const newDisplayName = document.getElementById('display-name-input').value.trim();
-  const newBio = document.getElementById('bio-input').value.trim();
-  
-  if (newDisplayName.length > 16) {
-    return alert("Display name cannot exceed 16 characters.");
-  }
-  if (newBio.length > 750) {
-    return alert("Bio cannot exceed 750 characters.");
-  }
-
-  try {
-    await update(ref(db, `users/${currentActiveUser}`), { displayName: newDisplayName, bio: newBio });
-    document.getElementById('profile-modal').classList.add('hidden');
-  } catch(err) { alert("Failed to save profile."); }
-});
-
-document.getElementById('pfp-upload').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file || !currentActiveUser) return;
-  if (file.size > MAX_FILE_SIZE) return alert("PFP must be under 5MB.");
-  try {
-    const base64 = await fileToBase64(file);
-    await update(ref(db, `users/${currentActiveUser}`), { pfp: base64 });
-  } catch (err) { console.error(err); }
-});
-
-// Admin Panel Logic
-openAdminBtn.addEventListener('click', async () => {
-  adminModal.classList.remove('hidden');
-  const staffSelect = document.getElementById('staff-roster-select');
-  staffSelect.innerHTML = '<option value="">-- View Current Staff --</option>';
-  const snap = await get(child(dbRef, 'users'));
-  snap.forEach(user => {
-    if(user.val().isStaff && !user.val().wipedTo) staffSelect.innerHTML += `<option value="${user.key}">@${user.key} ${user.val().displayName ? `(${user.val().displayName})` : ''}</option>`;
-  });
-  if(currentActiveUser === 'thecoolwebsitemaker') loadGeneratedCodes();
-});
-
-closeAdminBtn.addEventListener('click', () => adminModal.classList.add('hidden'));
-
-// Announcements
-sendAnnounceBtn.addEventListener('click', async () => {
-  const text = announceText.value.trim();
-  const dur = parseInt(announceDuration.value);
-  if(!text) return;
-  await set(ref(db, 'global_events/announcement'), { text, expiresAt: Date.now() + (dur * 1000) });
-  announceText.value = '';
-});
-
-onValue(ref(db, 'global_events/announcement'), (snap) => {
-  if(!snap.exists()) return;
-  const data = snap.val();
-  if(Date.now() < data.expiresAt) {
-    announcementTextDisplay.textContent = data.text;
-    announcementBanner.classList.remove('hidden');
-    clearTimeout(announceTimeout);
-    announceTimeout = setTimeout(() => announcementBanner.classList.add('hidden'), data.expiresAt - Date.now());
-  }
-});
-
-// User Management Search
-document.getElementById('admin-search-btn').addEventListener('click', async () => {
-  const search = document.getElementById('admin-user-search').value.trim().toLowerCase();
-  const snap = await get(child(dbRef, `users/${search}`));
-  if(snap.exists() && !snap.val().wipedTo) {
-    adminTargetUser = search;
-    adminTargetUserData = snap.val();
-    document.getElementById('target-user-display').textContent = `Target: @${search}`;
-    document.getElementById('admin-user-actions').classList.remove('hidden');
-  } else {
-    alert("User not found.");
-    adminTargetUser = null;
-    adminTargetUserData = null;
-    document.getElementById('admin-user-actions').classList.add('hidden');
-  }
-});
-
-function canPerformActionOnTarget() {
-  if (!adminTargetUser) return false;
-  if (adminTargetUser === 'thecoolwebsitemaker' && currentActiveUser !== 'thecoolwebsitemaker') {
-    alert("Action denied: You cannot target the site owner.");
-    return false;
-  }
-  if (currentActiveUser !== 'thecoolwebsitemaker') {
-    if (adminTargetUser === 'thecoolwebsitemaker' || (adminTargetUserData && adminTargetUserData.isStaff)) {
-      alert("Action denied: Staff members cannot mute, block, or wipe the owner or other staff members.");
-      return false;
-    }
-  }
-  return true;
-}
-
-document.getElementById('admin-mute-btn').addEventListener('click', async () => {
-  const mins = parseInt(document.getElementById('mute-duration').value);
-  if(!canPerformActionOnTarget() || isNaN(mins)) return;
-  await update(ref(db, `users/${adminTargetUser}`), { mutedUntil: Date.now() + (mins * 60000) });
-  alert(`@${adminTargetUser} muted for ${mins} minutes.`);
-});
-
-document.getElementById('admin-wipe-btn').addEventListener('click', async () => {
-  if(!canPerformActionOnTarget()) return;
-  if(!confirm(`Are you sure you want to wipe @${adminTargetUser}?`)) return;
-  const rand = Math.random().toString(36).substring(2, 8);
-  const newUname = 'user_' + rand;
-  const oldData = adminTargetUserData;
-  
-  await set(ref(db, `users/${newUname}`), { ...oldData, displayName: "", bio: "", pfp: DEFAULT_PFP, isStaff: false });
-  await set(ref(db, `users/${adminTargetUser}`), { wipedTo: newUname });
-  
-  alert(`Account wiped. New username: ${newUname}`);
-  document.getElementById('admin-user-actions').classList.add('hidden');
-});
-
-document.getElementById('admin-block-btn').addEventListener('click', async () => {
-  if(!canPerformActionOnTarget()) return;
-  await set(ref(db, `blocked_users/${adminTargetUser}`), true);
-  alert(`@${adminTargetUser} blocked from the site.`);
-});
-
-document.getElementById('admin-revoke-btn').addEventListener('click', async () => {
-  if(!adminTargetUser || currentActiveUser !== 'thecoolwebsitemaker') return;
-  if(adminTargetUser === 'thecoolwebsitemaker') return alert("You cannot revoke the owner's privileges.");
-  await update(ref(db, `users/${adminTargetUser}`), { isStaff: false });
-  alert(`Staff privileges revoked from @${adminTargetUser}.`);
-});
-
-// Owner Tools
-async function loadGeneratedCodes() {
-  const codesSelect = document.getElementById('generated-codes-select');
-  codesSelect.innerHTML = '<option value="">-- Active & Used Codes --</option>';
-  
-  const activeStaffSnap = await get(child(dbRef, 'generated_codes/active/staff'));
-  if(activeStaffSnap.exists()) {
-    activeStaffSnap.forEach(c => {
-      codesSelect.innerHTML += `<option>[ACTIVE STAFF] ${c.key}</option>`;
-    });
-  }
-  
-  const activeUnblockSnap = await get(child(dbRef, 'generated_codes/active/unblock'));
-  if(activeUnblockSnap.exists()) {
-    activeUnblockSnap.forEach(c => {
-      codesSelect.innerHTML += `<option>[ACTIVE UNBLOCK] ${c.key}</option>`;
-    });
-  }
-
-  const usedSnap = await get(child(dbRef, 'generated_codes/used'));
-  if(usedSnap.exists()) {
-    usedSnap.forEach(c => {
-      const data = c.val();
-      codesSelect.innerHTML += `<option>[USED (${data.type.toUpperCase()})] ${c.key} - By: @${data.usedBy}</option>`;
-    });
-  }
-}
-
-document.getElementById('gen-staff-code-btn').addEventListener('click', async () => {
-  const code = 'staffaccess_' + Math.random().toString(36).substring(2, 10);
-  await set(ref(db, `generated_codes/active/staff/${code}`), true);
-  alert(`Generated: ${code}`); 
-  loadGeneratedCodes();
-});
-
-document.getElementById('gen-unblock-code-btn').addEventListener('click', async () => {
-  const code = 'unblock_' + Math.random().toString(36).substring(2, 10);
-  await set(ref(db, `generated_codes/active/unblock/${code}`), true);
-  alert(`Generated: ${code}`); 
-  loadGeneratedCodes();
-});
-
-// DM Blocking
-dmBlockToggleBtn.addEventListener('click', async () => {
-  if(!currentDMTarget) return;
-  if(isCurrentDMBlocked) {
-    await remove(ref(db, `user_dms_blocked/${currentActiveUser}/${currentDMTarget}`));
-    isCurrentDMBlocked = false;
-  } else {
-    await set(ref(db, `user_dms_blocked/${currentActiveUser}/${currentDMTarget}`), true);
-    isCurrentDMBlocked = true;
-  }
-  updateDMBlockBtnUI();
-});
-
-function updateDMBlockBtnUI() {
-  dmBlockToggleBtn.textContent = isCurrentDMBlocked ? "Unblock User" : "Block User";
-  dmBlockToggleBtn.className = isCurrentDMBlocked ? "secondary-btn" : "danger-btn";
-}
-
-function checkDMBlockStatus(targetUser) {
-  onValue(ref(db, `user_dms_blocked/${currentActiveUser}/${targetUser}`), (snap) => {
-    isCurrentDMBlocked = (snap.exists() && snap.val() === true);
-    updateDMBlockBtnUI();
-  });
-}
-
-// Global Message Actions
-messagesContainer.addEventListener('click', async (e) => {
-  if (e.target.classList.contains('message-author')) {
-    const clickedUser = e.target.dataset.username;
-    try {
-      const snap = await get(child(dbRef, `users/${clickedUser}`));
-      if(snap.exists()) {
-        const data = snap.val();
-        const disp = data.displayName ? ` (${data.displayName})` : '';
-        alert(`User: @${clickedUser}${disp}\nAge: ${data.age || 'Not set'}\nBio: ${data.bio || 'No bio written.'}`);
-      }
-    } catch(err) { console.error(err); }
-  }
-  
-  if (e.target.classList.contains('reply-btn')) {
-    currentReplyContext = {
-      username: e.target.dataset.username,
-      displayName: e.target.dataset.displayname,
-      text: e.target.dataset.text
-    };
-    replyToName.textContent = currentReplyContext.displayName || currentReplyContext.username;
-    replyToText.textContent = currentReplyContext.text || "Attachment";
-    replyBanner.classList.remove('hidden');
-    messageInput.focus();
-  }
-
-  if (e.target.classList.contains('admin-block-btn')) {
-    const targetUsername = e.target.dataset.username;
-    if (targetUsername === 'thecoolwebsitemaker' && currentActiveUser !== 'thecoolwebsitemaker') {
-      return alert("You cannot block the site owner.");
-    }
-    
-    const targetSnap = await get(child(dbRef, `users/${targetUsername}`));
-    if (currentActiveUser !== 'thecoolwebsitemaker' && targetSnap.exists() && targetSnap.val().isStaff) {
-      return alert("Staff members cannot block other staff members.");
-    }
-
-    if (confirm(`Are you sure you want to block ${targetUsername} from the site?`)) {
-      await set(ref(db, `blocked_users/${targetUsername}`), true);
-    }
-  }
-
-  if (e.target.classList.contains('admin-revoke-btn')) {
-    const targetUsername = e.target.dataset.username;
-    if (targetUsername === 'thecoolwebsitemaker') return alert("You cannot revoke the owner's privileges.");
-    if (confirm(`Revoke staff privileges from ${targetUsername}?`)) {
-      await update(ref(db, `users/${targetUsername}`), { isStaff: false });
-    }
-  }
-});
-
-cancelReplyBtn.addEventListener('click', () => {
-  currentReplyContext = null;
-  replyBanner.classList.add('hidden');
-});
-
-// DM Search
-dmSearchInput.addEventListener('input', async (e) => {
-  const queryText = e.target.value.trim().toLowerCase();
-  if (!queryText) { dmSearchResults.classList.add('hidden'); dmSearchResults.innerHTML = ''; return; }
-
-  try {
-    const snap = await get(child(dbRef, 'users'));
-    if (!snap.exists()) return;
-    
-    dmSearchResults.innerHTML = '';
-    let matches = 0;
-    snap.forEach((userSnap) => {
-      const uname = userSnap.key; const udata = userSnap.val();
-      if (udata.wipedTo) return;
-      if (uname !== currentActiveUser && (uname.includes(queryText) || (udata.displayName && udata.displayName.toLowerCase().includes(queryText)))) {
-        matches++;
-        const item = document.createElement('div');
-        item.classList.add('dm-search-result-item');
-        item.innerHTML = `<img src="${udata.pfp || DEFAULT_PFP}" class="dm-result-pfp"><span>@${uname}</span>`;
-        item.addEventListener('click', () => { openDMChannel(uname); dmSearchInput.value = ''; dmSearchResults.classList.add('hidden'); });
-        dmSearchResults.appendChild(item);
-      }
-    });
-    if (matches > 0) dmSearchResults.classList.remove('hidden');
-    else dmSearchResults.classList.add('hidden');
-  } catch (err) { console.error(err); }
-});
-
-document.addEventListener('click', (e) => {
-  if (!dmSearchInput.contains(e.target) && !dmSearchResults.contains(e.target)) dmSearchResults.classList.add('hidden');
-});
-
-function getDMKey(userA, userB) { return [userA, userB].sort().join('_'); }
-async function openDMChannel(otherUser) {
-  const dmId = getDMKey(currentActiveUser, otherUser);
-  await set(ref(db, `user_dms/${currentActiveUser}/${dmId}`), otherUser);
-  switchChannel(dmId, 'dm', otherUser);
-}
-
-function loadUserDMs() {
-  onValue(ref(db, `user_dms/${currentActiveUser}`), (snapshot) => {
-    dmChannelsList.innerHTML = '';
-    if (!snapshot.exists()) return;
-    snapshot.forEach((childSnap) => {
-      const dmId = childSnap.key; const otherUser = childSnap.val();
-      const dmEl = document.createElement('div');
-      dmEl.classList.add('channel', 'dm-channel');
-      if (currentChannel === dmId) dmEl.classList.add('active');
-      dmEl.innerHTML = `<span>💬 @${otherUser}</span>`;
-      dmEl.addEventListener('click', () => switchChannel(dmId, 'dm', otherUser));
-      dmChannelsList.appendChild(dmEl);
-    });
-  });
-}
-
-// Staff Code Redemption
-document.querySelectorAll('.channel[data-type="text"]').forEach(el => {
-  el.addEventListener('click', async () => {
-    const targetChannel = el.dataset.channel;
-    if(targetChannel === currentChannel) return;
-
-    if(targetChannel === 'staff' && !currentUserData.isStaff) {
-      const code = prompt("Enter a staff code:");
-      if(!code) return;
-      try {
-        const claimCheck = await get(child(dbRef, `generated_codes/active/staff/${code}`));
-        if(!claimCheck.exists()) return alert("Invalid staff code.");
-        
-        const updates = {};
-        updates[`generated_codes/active/staff/${code}`] = null;
-        updates[`generated_codes/used/${code}`] = { usedBy: currentActiveUser, type: 'staff', usedAt: serverTimestamp() };
-        updates[`users/${currentActiveUser}/isStaff`] = true;
-        
-        await update(ref(db), updates);
-        alert("Access Granted! You are now Staff.");
-      } catch(err) { 
-        console.error(err);
-        return alert("Error verifying staff code."); 
-      }
-    }
-    switchChannel(targetChannel, 'text');
-  });
-});
-
-// Unblock Code Redemption
-document.getElementById('unblock-btn').addEventListener('click', async () => {
-  const code = document.getElementById('unblock-code-input').value.trim();
-  if (!code) return alert("Please enter an unblock code.");
-  
-  try {
-    const claimCheck = await get(child(dbRef, `generated_codes/active/unblock/${code}`));
-    if(!claimCheck.exists()) return alert("Invalid unblock code.");
-    
-    const updates = {};
-    updates[`generated_codes/active/unblock/${code}`] = null;
-    updates[`generated_codes/used/${code}`] = { usedBy: currentActiveUser, type: 'unblock', usedAt: serverTimestamp() };
-    updates[`blocked_users/${currentActiveUser}`] = null;
-    
-    await update(ref(db), updates);
-    
-    document.getElementById('unblock-code-input').value = "";
-    alert("Successfully unblocked! Welcome back.");
-  } catch(err) { 
-    console.error(err);
-    return alert("Error verifying unblock code."); 
-  }
-});
-
-function switchChannel(channelName, type, extraData = null) {
-  currentChannel = channelName; currentChannelType = type;
-  document.querySelectorAll('.channel').forEach(c => c.classList.remove('active'));
-  const activeEl = document.querySelector(`.channel[data-channel="${channelName}"]`) || Array.from(document.querySelectorAll('.dm-channel')).find(el => el.dataset.channel === channelName);
-  if(activeEl) activeEl.classList.add('active');
-  
-  if (type === 'text') {
-    document.getElementById('current-channel-title').textContent = channelName === 'main' ? "# main-chat" : "# staff-chat";
-    dmBlockToggleBtn.classList.add('hidden');
-    currentDMTarget = null;
-  } else {
-    document.getElementById('current-channel-title').textContent = `💬 DM with @${extraData}`;
-    dmBlockToggleBtn.classList.remove('hidden');
-    currentDMTarget = extraData;
-    checkDMBlockStatus(extraData);
-  }
-  
-  currentReplyContext = null;
-  replyBanner.classList.add('hidden');
-  
-  if (unsubscribeMessages) unsubscribeMessages();
-  if (unsubscribeTyping) unsubscribeTyping();
-  
-  loadMessages();
-  listenToTyping();
-}
-
-// Typing Indicators
-messageInput.addEventListener('input', () => {
-  if (!currentActiveUser) return;
-  const typingRefKey = currentChannelType === 'text' ? `typing_text/${currentChannel}` : `typing_dm/${currentChannel}`;
-  set(ref(db, `${typingRefKey}/${currentActiveUser}`), true);
-  
-  clearTimeout(typingTimeout);
-  typingTimeout = setTimeout(() => {
-    remove(ref(db, `${typingRefKey}/${currentActiveUser}`));
-  }, 1000);
-});
-
-function listenToTyping() {
-  const typingRefKey = currentChannelType === 'text' ? `typing_text/${currentChannel}` : `typing_dm/${currentChannel}`;
-  unsubscribeTyping = onValue(ref(db, typingRefKey), (snapshot) => {
-    const typers = [];
-    snapshot.forEach((childSnap) => {
-      if (childSnap.key !== currentActiveUser && childSnap.val() === true) typers.push(childSnap.key);
-    });
-
-    if (typers.length > 0) {
-      typingIndicator.textContent = typers.join(', ') + (typers.length > 1 ? " are typing..." : " is typing...");
-      typingIndicator.classList.remove('hidden');
-    } else {
-      typingIndicator.classList.add('hidden');
-    }
-  });
-}
-
-// File Attachments
-fileUpload.addEventListener('change', async (e) => {
-  chatError.classList.add('hidden');
-  const file = e.target.files[0];
-  if (!file) return;
-  if (file.size > MAX_FILE_SIZE) {
-    chatError.textContent = "File exceeds 5MB limit.";
-    chatError.classList.remove('hidden');
-    fileUpload.value = "";
-    return;
-  }
-  try {
-    const base64 = await fileToBase64(file);
-    attachedFileData = { name: file.name, type: file.type, data: base64 };
-    filePreviewName.textContent = file.name;
-    filePreview.classList.remove('hidden');
-  } catch (err) { console.error(err); }
-});
-
-document.getElementById('remove-file-btn').addEventListener('click', () => {
-  attachedFileData = null;
-  fileUpload.value = "";
-  filePreview.classList.add('hidden');
-});
-
-// Sending Messages (Added 1,750 Character Limit Check)
-messageForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const text = messageInput.value.trim();
-  if (text === "" && !attachedFileData) return;
-  
-  if (text.length > 1750) {
-    chatError.textContent = "Message exceeds the 1,750 character limit.";
-    chatError.classList.remove('hidden');
-    return;
-  }
-
-  // Rate Limiting
-  const now = Date.now();
-  if (now - lastMessageTime < 1000) {
-    chatError.textContent = "Wait a second before sending another message!";
-    chatError.classList.remove('hidden');
-    return;
-  }
-  chatError.classList.add('hidden');
-  lastMessageTime = now;
-
-  // Mute Check
-  if(currentUserData.mutedUntil && currentUserData.mutedUntil > Date.now()) {
-    const minsLeft = Math.ceil((currentUserData.mutedUntil - Date.now()) / 60000);
-    alert(`You are muted for ${minsLeft} more minutes.`);
-    return;
-  }
-
-  // DM Block Check
-  if(currentChannelType === 'dm') {
-    const blockCheck = await get(child(dbRef, `user_dms_blocked/${currentDMTarget}/${currentActiveUser}`));
-    if(blockCheck.exists() && blockCheck.val() === true) {
-      alert("You cannot send messages to this user.");
-      return;
-    }
-  }
-
-  const payload = {
-    text: text, username: currentActiveUser, displayName: currentUserData?.displayName || "",
-    pfp: currentUserData?.pfp || DEFAULT_PFP, isStaff: currentUserData?.isStaff || false, createdAt: serverTimestamp()
-  };
-
-  if (attachedFileData) payload.file = attachedFileData;
-  if (currentReplyContext) payload.replyTo = currentReplyContext;
-
-  messageInput.value = '';
-  attachedFileData = null;
-  fileUpload.value = "";
-  filePreview.classList.add('hidden');
-  currentReplyContext = null;
-  replyBanner.classList.add('hidden');
-
-  const typingRefKey = currentChannelType === 'text' ? `typing_text/${currentChannel}` : `typing_dm/${currentChannel}`;
-  remove(ref(db, `${typingRefKey}/${currentActiveUser}`));
-
-  try { 
-    if (currentChannelType === 'text') { 
-      await push(ref(db, `messages_${currentChannel}`), payload); 
-    } else {
-      await push(ref(db, `messages_dm_${currentChannel}`), payload);
-      const parts = currentChannel.split('_');
-      const otherUser = parts[0] === currentActiveUser ? parts[1] : parts[0];
-      await set(ref(db, `user_dms/${otherUser}/${currentChannel}`), currentActiveUser);
-    }
-  } catch (error) { console.error(error); }
-});
-
-// Load & Render Messages
-function loadMessages() {
-  const dbPath = currentChannelType === 'text' ? `messages_${currentChannel}` : `messages_dm_${currentChannel}`;
-  let isFirstLoad = true;
-  unsubscribeMessages = onValue(query(ref(db, dbPath), limitToLast(50)), (snapshot) => {
-    messagesContainer.innerHTML = ''; 
-    let latestMsg = null;
-    snapshot.forEach((childSnapshot) => {
-      const data = childSnapshot.val(); latestMsg = data;
-      const messageDiv = document.createElement('div');
-      messageDiv.classList.add('message');
-      
-      let timeString = 'Just now';
-      if (data.createdAt) {
-        timeString = new Date(data.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-      }
-
-      let fileHtml = "";
-      if (data.file) {
-        if (data.file.type.startsWith("image/")) {
-          fileHtml = `<div class="attachment-container"><img src="${data.file.data}"></div>`;
-        } else if (data.file.type.startsWith("video/")) {
-          fileHtml = `<div class="attachment-container"><video controls src="${data.file.data}"></video></div>`;
-        } else if (data.file.type.startsWith("audio/")) {
-          fileHtml = `<div class="attachment-container"><audio controls src="${data.file.data}"></audio></div>`;
+        if (isLoginMode) {
+            if (!unSnap.exists()) throw new Error("Account not found.");
+            const uid = unSnap.val();
+            const uSnap = await get(ref(db, `users/${uid}`));
+            if (uSnap.val().passwordHash !== pHash) throw new Error("Incorrect password.");
+            await startSession(uid, uSnap.val());
         } else {
-          fileHtml = `<div class="attachment-container"><a href="${data.file.data}" download="${data.file.name}" class="download-link">Download ${data.file.name}</a></div>`;
+            if (unSnap.exists()) throw new Error("Username taken.");
+            const uid = push(ref(db, 'users')).key;
+            const isOwner = userNorm === 'owner';
+            const newUser = {
+                username: userRaw,
+                normalizedUsername: userNorm,
+                passwordHash: pHash,
+                displayName: userRaw,
+                bio: "",
+                profilePicture: defaultAvatar,
+                role: isOwner ? "owner" : "user",
+                blocked: false,
+                mutedUntil: 0,
+                createdAt: Date.now()
+            };
+            
+            await update(ref(db), { [`usernames/${userNorm}`]: uid, [`users/${uid}`]: newUser });
+            await startSession(uid, newUser);
         }
-      }
+    } catch (err) {
+        errorEl.innerText = err.message;
+    }
+    el('auth-action-btn').disabled = false;
+};
 
-      let badges = (data.username === 'thecoolwebsitemaker') ? ' <span class="dev-badge" title="Web Developer">💻</span>' : '';
-      if (data.isStaff) badges += ' <span class="staff-badge" title="Staff">🛡️</span>';
+async function startSession(uid, userData) {
+    if (userData.blocked) return showScreen('blocked');
+    localStorage.setItem('tnd_uid', uid);
+    currentUser = { uid, ...userData };
+    initApp();
+}
 
-      const visibleName = data.displayName || data.username;
+function showScreen(name) {
+    Object.values(screens).forEach(s => s.classList.add('hidden'));
+    screens[name].classList.remove('hidden');
+}
 
-      let replyHtml = "";
-      if (data.replyTo) {
-        const repliedName = data.replyTo.displayName || data.replyTo.username;
-        replyHtml = `
-          <div class="replied-message-block">
-            <span class="replied-author">Replying to ${repliedName}:</span> 
-            <span class="replied-text">${data.replyTo.text || "Attachment"}</span>
-          </div>
-        `;
-      }
+// Session Restore
+window.onload = async () => {
+    const uid = localStorage.getItem('tnd_uid');
+    if (!uid) return showScreen('auth');
+    
+    const uSnap = await get(ref(db, `users/${uid}`));
+    if (uSnap.exists()) {
+        const uData = uSnap.val();
+        if(uData.blocked) return showScreen('blocked');
+        currentUser = { uid, ...uData };
+        initApp();
+    } else {
+        localStorage.removeItem('tnd_uid');
+        showScreen('auth');
+    }
+};
 
-      let blockBtnHtml = "";
-      if (currentUserData.isStaff && !data.isStaff && data.username !== currentActiveUser) {
-        blockBtnHtml = `<button class="admin-block-btn danger-btn" data-username="${data.username}" style="padding: 2px 6px; font-size: 11px;">Block</button>`;
-      }
+el('btn-logout').onclick = () => {
+    localStorage.removeItem('tnd_uid');
+    window.location.reload();
+};
 
-      let revokeStaffBtnHtml = "";
-      const canRevoke = (currentActiveUser === 'thecoolwebsitemaker');
-      if (canRevoke && data.isStaff && data.username !== currentActiveUser && data.username !== 'thecoolwebsitemaker') {
-        revokeStaffBtnHtml = `<button class="admin-revoke-btn danger-btn" data-username="${data.username}" style="padding: 2px 6px; font-size: 11px; background-color: #f59e0b;">Revoke</button>`;
-      }
+// ==========================================
+// 5. MAIN APP INITIALIZATION & LISTENERS
+// ==========================================
+function initApp() {
+    showScreen('app');
+    el('my-avatar').src = currentUser.profilePicture;
+    el('my-name').innerText = currentUser.displayName;
+    
+    const roleBadge = el('my-role');
+    if(currentUser.role !== 'user') {
+        roleBadge.innerText = currentUser.role;
+        roleBadge.className = `role-badge role-${currentUser.role}`;
+    } else { roleBadge.innerText = ""; roleBadge.className="role-badge"; }
 
-      const safeText = data.text ? data.text.replace(/"/g, '&quot;') : '';
-      const safeDisp = data.displayName ? data.displayName.replace(/"/g, '&quot;') : '';
+    // Role-based UI
+    if (['owner', 'admin', 'helper'].includes(currentUser.role)) {
+        el('chan-staff').classList.remove('hidden');
+        el('staff-controls').classList.remove('hidden');
+        if(['owner', 'admin'].includes(currentUser.role)) el('btn-mod-broadcast').classList.remove('hidden');
+    }
 
-      messageDiv.innerHTML = `
-        <img src="${data.pfp || DEFAULT_PFP}" class="msg-pfp" alt="PFP">
-        <div class="msg-content">
-          <div class="message-header">
-            <span class="message-author" data-username="${data.username}">${visibleName}</span>${badges}
-            <span class="message-time">${timeString}</span>
-            <div class="message-actions">
-              <button class="reply-btn" data-username="${data.username}" data-displayname="${safeDisp}" data-text="${safeText}">Reply</button>
-              ${blockBtnHtml}
-              ${revokeStaffBtnHtml}
-            </div>
-          </div>
-          ${replyHtml}
-          <div class="message-text">${data.text}</div>
-          ${fileHtml}
-        </div>
-      `;
-      messagesContainer.appendChild(messageDiv);
+    // Monitor current user status (blocks/roles/mutes)
+    onValue(ref(db, `users/${currentUser.uid}`), (snap) => {
+        if(!snap.exists()) return el('btn-logout').click();
+        const data = snap.val();
+        if(data.blocked) return window.location.reload(); // Will show blocked screen
+        currentUser = { uid: currentUser.uid, ...data };
     });
 
-    if (!isFirstLoad && latestMsg && latestMsg.username !== currentActiveUser) {
-      const isReplyToMe = latestMsg.replyTo && latestMsg.replyTo.username === currentActiveUser;
-      if (currentChannelType === 'dm' || isReplyToMe) {
-        showDesktopNotification(currentChannelType === 'dm' ? `New DM from @${latestMsg.username}` : `New reply from @${latestMsg.username}`, latestMsg.text || "sent an attachment");
-      }
+    // Monitor Broadcasts
+    onValue(ref(db, 'broadcast/current'), (snap) => {
+        const b = snap.val();
+        const banner = el('broadcast-banner');
+        if(b && b.expiresAt > Date.now()) {
+            banner.innerText = b.message;
+            banner.classList.remove('hidden');
+            setTimeout(() => banner.classList.add('hidden'), b.expiresAt - Date.now());
+        } else { banner.classList.add('hidden'); }
+    });
+
+    // Block Requests Dot
+    if(['owner', 'admin'].includes(currentUser.role)) {
+        onValue(ref(db, 'blockRequests'), (snap) => {
+            el('req-dot').classList.toggle('hidden', !snap.exists());
+        });
     }
-    isFirstLoad = false;
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-  });
+
+    switchChannel(currentChannel);
 }
+
+// ==========================================
+// 6. CHANNEL & MESSAGING
+// ==========================================
+document.querySelectorAll('.channel-item').forEach(item => {
+    item.onclick = () => switchChannel(item.dataset.channel);
+});
+
+function switchChannel(channelId) {
+    if(channelId === 'staff' && !['owner', 'admin', 'helper'].includes(currentUser.role)) channelId = 'general';
+    
+    currentChannel = channelId;
+    localStorage.setItem('lastChannel', channelId);
+    
+    document.querySelectorAll('.channel-item').forEach(i => i.classList.remove('active'));
+    document.querySelector(`[data-channel="${channelId}"]`).classList.add('active');
+    el('current-channel-name').innerText = `# ${channelId}`;
+    
+    el('chat-messages').innerHTML = "";
+    msgListeners.forEach(l => l()); // Cleanup old listeners (simulate off())
+    msgListeners = [];
+    
+    const cRef = ref(db, `messages/${channelId}`);
+    
+    const l1 = onChildAdded(cRef, (data) => renderMessage(data.key, data.val()));
+    const l2 = onChildChanged(cRef, (data) => updateMessageUI(data.key, data.val()));
+    const l3 = onChildRemoved(cRef, (data) => removeMessageUI(data.key));
+    
+    msgListeners.push(() => { /* Firebase JS 10+ handles off differently, keeping simple for demo */ });
+}
+
+el('btn-send').onclick = () => sendMessage();
+el('msg-input').onkeydown = (e) => {
+    if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+};
+
+async function sendMessage(fileData = null) {
+    if(currentUser.mutedUntil > Date.now()) return showToast(`Muted. Expires in ${Math.ceil((currentUser.mutedUntil - Date.now())/60000)} min.`);
+    
+    const input = el('msg-input');
+    const text = input.value.trim();
+    if(!text && !fileData) return;
+
+    input.value = "";
+    const msgObj = {
+        senderId: currentUser.uid,
+        senderUsername: currentUser.username,
+        senderDisplay: currentUser.displayName,
+        senderAvatar: currentUser.profilePicture,
+        text: text,
+        timestamp: serverTimestamp(),
+        replyTo: replyingToId,
+        file: fileData
+    };
+
+    if(editingMsgId) {
+        await update(ref(db, `messages/${currentChannel}/${editingMsgId}`), { text: text, edited: true });
+        editingMsgId = null;
+    } else {
+        await push(ref(db, `messages/${currentChannel}`), msgObj);
+    }
+    
+    cancelReply();
+}
+
+// ==========================================
+// 7. FILE HANDLING (Base64)
+// ==========================================
+el('btn-upload').onclick = () => el('file-upload').click();
+
+el('file-upload').onchange = (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    
+    if(file.size > 2 * 1024 * 1024) return showToast("File too large. Max 2MB."); // Limit before Base64 inflation
+    
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        const base64Str = ev.target.result;
+        if(base64Str.length > 3000000) return showToast("File encoding too large.");
+        sendMessage({ name: file.name, type: file.type, data: base64Str, size: file.size });
+    };
+    reader.readAsDataURL(file);
+    el('file-upload').value = ""; // Reset
+};
+
+// ==========================================
+// 8. MESSAGE RENDERING
+// ==========================================
+function renderMessage(id, data) {
+    const div = document.createElement('div');
+    div.className = 'message';
+    div.id = `msg-${id}`;
+    
+    const time = new Date(data.timestamp || Date.now());
+    const isToday = time.toDateString() === new Date().toDateString();
+    const timeStr = isToday ? `Today at ${time.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}` : time.toLocaleString();
+
+    let fileHtml = "";
+    if(data.file) {
+        if(data.file.type.startsWith('image/')) fileHtml = `<img src="${data.file.data}" class="media-embed">`;
+        else if(data.file.type.startsWith('video/')) fileHtml = `<video src="${data.file.data}" controls class="media-embed"></video>`;
+        else if(data.file.type.startsWith('audio/')) fileHtml = `<audio src="${data.file.data}" controls class="media-embed"></audio>`;
+        else fileHtml = `<div class="file-card"><span>📄 ${sanitize(data.file.name)}</span> <a href="${data.file.data}" download="${sanitize(data.file.name)}"><button>Download</button></a></div>`;
+    }
+
+    let replyHtml = "";
+    if(data.replyTo) replyHtml = `<div class="reply-ref" onclick="document.getElementById('msg-${data.replyTo}')?.scrollIntoView()">Replying to a message...</div>`;
+
+    const canEdit = data.senderId === currentUser.uid;
+    const canDel = canEdit || ['owner', 'admin', 'helper'].includes(currentUser.role);
+
+    div.innerHTML = `
+        <img src="${data.senderAvatar}" class="avatar clickable" onclick="viewUser('${data.senderId}')">
+        <div class="msg-content">
+            ${replyHtml}
+            <div class="msg-header">
+                <span class="msg-name" onclick="viewUser('${data.senderId}')">${sanitize(data.senderDisplay)}</span>
+                <span class="msg-time">${timeStr}</span>
+                ${data.edited ? '<span class="msg-edited">(edited)</span>' : ''}
+            </div>
+            <div class="msg-text">${sanitize(data.text)}</div>
+            ${fileHtml}
+        </div>
+        <div class="msg-actions">
+            <button onclick="replyTo('${id}', '${sanitize(data.senderDisplay)}')">↩️</button>
+            ${canEdit ? `<button onclick="editMsg('${id}', \`${sanitize(data.text)}\`)">✏️</button>` : ''}
+            ${canDel ? `<button onclick="delMsg('${id}')">🗑️</button>` : ''}
+        </div>
+    `;
+
+    const container = el('chat-messages');
+    container.appendChild(div);
+    
+    // Auto-scroll logic (scroll if near bottom)
+    if(container.scrollHeight - container.scrollTop < container.clientHeight + 100) {
+        container.scrollTop = container.scrollHeight;
+    }
+}
+
+function updateMessageUI(id, data) {
+    const msg = el(`msg-${id}`);
+    if(msg) {
+        msg.querySelector('.msg-text').innerText = data.text;
+        if(data.edited && !msg.innerHTML.includes('(edited)')) {
+            msg.querySelector('.msg-header').innerHTML += '<span class="msg-edited">(edited)</span>';
+        }
+    }
+}
+
+function removeMessageUI(id) {
+    const msg = el(`msg-${id}`);
+    if(msg) msg.remove();
+}
+
+window.replyTo = (id, name) => {
+    replyingToId = id;
+    el('reply-preview').classList.remove('hidden');
+    el('reply-to-name').innerText = name;
+    el('msg-input').focus();
+};
+
+window.editMsg = (id, text) => {
+    editingMsgId = id;
+    el('msg-input').value = text;
+    el('msg-input').focus();
+};
+
+window.delMsg = async (id) => {
+    if(confirm("Delete message?")) await remove(ref(db, `messages/${currentChannel}/${id}`));
+};
+
+el('btn-cancel-reply').onclick = cancelReply;
+function cancelReply() {
+    replyingToId = null;
+    editingMsgId = null;
+    el('reply-preview').classList.add('hidden');
+}
+
+// ==========================================
+// 9. PROFILES & MODALS
+// ==========================================
+function openModal(id) { el('modal-overlay').classList.remove('hidden'); el(id).classList.remove('hidden'); }
+function closeModals() {
+    el('modal-overlay').classList.add('hidden');
+    document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
+}
+document.querySelectorAll('.close-modal').forEach(b => b.onclick = closeModals);
+el('modal-overlay').onclick = closeModals;
+document.onkeydown = (e) => { if(e.key === 'Escape') closeModals(); };
+
+el('btn-profile').onclick = () => {
+    el('edit-display-name').value = currentUser.displayName;
+    el('edit-bio').value = currentUser.bio;
+    openModal('modal-profile');
+};
+
+el('my-avatar').onclick = () => {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = 'image/*';
+    inp.onchange = (e) => {
+        const f = e.target.files[0];
+        if(!f) return;
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+            const b64 = ev.target.result;
+            await update(ref(db, `users/${currentUser.uid}`), { profilePicture: b64 });
+            showToast("Avatar updated!");
+        };
+        reader.readAsDataURL(f);
+    };
+    inp.click();
+};
+
+el('btn-save-profile').onclick = async () => {
+    const name = el('edit-display-name').value.trim();
+    const bio = el('edit-bio').value.trim();
+    if(name.length > 16) return showToast("Name max 16 chars.");
+    await update(ref(db, `users/${currentUser.uid}`), { displayName: name || currentUser.username, bio: bio });
+    closeModals();
+};
+
+window.viewUser = async (uid) => {
+    const snap = await get(ref(db, `users/${uid}`));
+    if(!snap.exists()) return;
+    const u = snap.val();
+    
+    el('view-user-avatar').src = u.profilePicture;
+    el('view-user-display').innerText = u.displayName;
+    el('view-user-username').innerText = `@${u.username}`;
+    el('view-user-bio').innerText = u.bio;
+    el('view-user-role').innerText = u.role !== 'user' ? u.role : '';
+    el('view-user-role').className = `role-badge role-${u.role}`;
+    
+    const actions = el('view-user-mod-actions');
+    actions.innerHTML = "";
+    actions.classList.add('hidden');
+
+    if(uid !== currentUser.uid && u.role !== 'owner') {
+        const isStaff = ['owner', 'admin', 'helper'].includes(currentUser.role);
+        if(isStaff) {
+            actions.classList.remove('hidden');
+            
+            // Block Logic
+            if(['owner', 'admin'].includes(currentUser.role)) {
+                actions.innerHTML += `<button class="danger-btn" onclick="modAction('${uid}', 'block', ${!u.blocked})">${u.blocked ? 'Unblock' : 'Block'}</button>`;
+                actions.innerHTML += `<button class="danger-btn" onclick="modAction('${uid}', 'mute')">Mute 10m</button>`;
+            } else if(currentUser.role === 'helper') {
+                actions.innerHTML += `<button class="danger-btn" onclick="openBlockReq('${uid}')">Req Block</button>`;
+            }
+
+            // Role Logic (Owner Only)
+            if(currentUser.role === 'owner') {
+                if(u.role === 'user') {
+                    actions.innerHTML += `<button class="primary-btn" onclick="modAction('${uid}', 'role', 'helper')">Make Helper</button>`;
+                    actions.innerHTML += `<button class="primary-btn" onclick="modAction('${uid}', 'role', 'admin')">Make Admin</button>`;
+                } else {
+                    actions.innerHTML += `<button class="danger-btn" onclick="modAction('${uid}', 'role', 'user')">Revoke Role</button>`;
+                }
+                actions.innerHTML += `<button class="danger-btn" onclick="modAction('${uid}', 'wipe')">Wipe Acc</button>`;
+            }
+        }
+    }
+    openModal('modal-view-user');
+};
+
+// ==========================================
+// 10. MODERATION ACTIONS
+// ==========================================
+window.modAction = async (uid, action, val = null) => {
+    const uRef = ref(db, `users/${uid}`);
+    if(action === 'block') await update(uRef, { blocked: val });
+    if(action === 'mute') await update(uRef, { mutedUntil: Date.now() + 10 * 60000 });
+    if(action === 'role') await update(uRef, { role: val });
+    if(action === 'wipe') {
+        const snap = await get(uRef);
+        const oldUser = snap.val();
+        const newUn = `user_${Math.random().toString(36).substr(2,6)}`;
+        await remove(ref(db, `usernames/${oldUser.normalizedUsername}`));
+        await update(ref(db), {
+            [`usernames/${newUn}`]: uid,
+            [`users/${uid}/username`]: newUn,
+            [`users/${uid}/normalizedUsername`]: newUn,
+            [`users/${uid}/displayName`]: newUn,
+            [`users/${uid}/bio`]: "",
+            [`users/${uid}/profilePicture`]: defaultAvatar
+        });
+    }
+    closeModals();
+    showToast(`Action ${action} completed.`);
+};
+
+// User Manager
+el('btn-mod-users').onclick = () => { openModal('modal-user-manager'); searchUsers(""); };
+el('search-users').oninput = (e) => searchUsers(e.target.value.toLowerCase());
+
+async function searchUsers(q) {
+    const container = el('user-search-results');
+    container.innerHTML = "Loading...";
+    const snap = await get(ref(db, 'users'));
+    container.innerHTML = "";
+    if(!snap.exists()) return;
+    
+    Object.entries(snap.val()).forEach(([uid, u]) => {
+        if(u.username.toLowerCase().includes(q) || u.displayName.toLowerCase().includes(q)) {
+            const div = document.createElement('div');
+            div.className = 'user-row';
+            div.innerHTML = `<div style="display:flex;gap:10px;align-items:center;">
+                <img src="${u.profilePicture}" class="avatar" style="width:24px;height:24px;">
+                <span>${sanitize(u.username)}</span>
+            </div> <span>${u.role}</span>`;
+            div.onclick = () => viewUser(uid);
+            container.appendChild(div);
+        }
+    });
+}
+
+// Broadcast
+if(el('btn-mod-broadcast')) {
+    el('btn-mod-broadcast').onclick = () => openModal('modal-broadcast');
+    el('btn-send-broadcast').onclick = async () => {
+        const msg = el('broadcast-msg').value.trim();
+        const dur = parseInt(el('broadcast-duration').value) || 10;
+        if(!msg || dur < 3 || dur > 20) return;
+        
+        await set(ref(db, 'broadcast/current'), {
+            message: msg,
+            createdBy: currentUser.uid,
+            startedAt: Date.now(),
+            expiresAt: Date.now() + (dur * 1000)
+        });
+        closeModals();
+        el('broadcast-msg').value = "";
+    };
+}
+
+// Block Requests
+let tempReqUid = null;
+window.openBlockReq = (uid) => { tempReqUid = uid; closeModals(); openModal('modal-block-req'); };
+
+el('btn-submit-block-req').onclick = async () => {
+    const reason = el('block-req-reason').value.trim();
+    if(!reason) return;
+    const reqId = push(ref(db, 'blockRequests')).key;
+    await set(ref(db, `blockRequests/${reqId}`), {
+        targetUserId: tempReqUid,
+        requestedBy: currentUser.username,
+        reason: reason,
+        createdAt: Date.now()
+    });
+    closeModals();
+    showToast("Request sent.");
+};
+
+el('btn-mod-requests').onclick = async () => {
+    openModal('modal-req-list');
+    const container = el('req-list-container');
+    container.innerHTML = "Loading...";
+    const snap = await get(ref(db, 'blockRequests'));
+    container.innerHTML = "";
+    
+    if(!snap.exists()) return container.innerHTML = "No pending requests.";
+    
+    Object.entries(snap.val()).forEach(([reqId, req]) => {
+        const div = document.createElement('div');
+        div.className = 'req-row';
+        div.innerHTML = `
+            <div>
+                <strong>Target:</strong> ${req.targetUserId.substring(0,6)}...<br>
+                <small>By: ${req.requestedBy}</small><br>
+                <small>Reason: ${sanitize(req.reason)}</small>
+            </div>
+            <div style="display:flex;gap:5px;">
+                <button class="primary-btn" onclick="resolveReq('${reqId}', '${req.targetUserId}', true)">Accept</button>
+                <button class="danger-btn" onclick="resolveReq('${reqId}', null, false)">Deny</button>
+            </div>
+        `;
+        container.appendChild(div);
+    });
+};
+
+window.resolveReq = async (reqId, targetUid, accept) => {
+    if(accept) await update(ref(db, `users/${targetUid}`), { blocked: true });
+    await remove(ref(db, `blockRequests/${reqId}`));
+    el('btn-mod-requests').click(); // Refresh list
+};
