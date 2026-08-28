@@ -14,27 +14,26 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="toast-container"></div>
 
-    <div id="auth-screen" class="screen active glass">
-        <h1 class="brand-title">The New Discord</h1>
-        <div id="auth-box">
-            <h2 id="auth-header">Login</h2>
-            <input type="text" id="auth-username" placeholder="Username (3-16 chars)" maxlength="16">
+    <div id="auth-screen" class="screen">
+        <div class="brand-title">ChatApp</div>
+        <div id="auth-box" class="glass">
+            <h2 id="auth-header">Log In</h2>
+            <input type="text" id="auth-username" placeholder="Username (3-16 chars)" autocomplete="off">
             <input type="password" id="auth-password" placeholder="Password">
             <button id="auth-action-btn" class="primary-btn">Log In</button>
-            <p id="auth-error" class="error-text"></p>
-            <p class="toggle-auth">
+            <div id="auth-error" class="error-text"></div>
+            <div class="toggle-auth">
                 <span id="auth-toggle-text">Need an account?</span> 
-                <a href="#" id="auth-toggle-link">Create Account</a>
-            </p>
+                <a href="#" id="auth-toggle-link">Sign Up</a>
+            </div>
         </div>
     </div>
 
     <div id="blocked-screen" class="screen hidden">
-        <div class="blocked-card glass">
-            <h1>You have been blocked from this site.</h1>
-            <p>Your access to The New Discord has been revoked.</p>
+        <div class="glass blocked-card">
+            <h1>Access Denied</h1>
+            <p>Your account has been blocked by moderators.</p>
         </div>
     </div>
 
@@ -42,110 +41,106 @@
         <div id="broadcast-banner" class="hidden"></div>
         
         <div class="app-layout">
-            <aside class="sidebar glass">
-                <div class="sidebar-header">
-                    <h2>The New Discord</h2>
-                </div>
+            <div class="sidebar glass">
+                <div class="sidebar-header">Workspaces</div>
                 <div class="channels">
-                    <div class="channel-item" data-channel="rules"># rules</div>
                     <div class="channel-item active" data-channel="general"># general</div>
-                    <div class="channel-item" data-channel="off-topic"># off-topic</div>
-                    <div class="channel-item hidden" id="chan-staff" data-channel="staff"># staff</div>
+                    <div class="channel-item" data-channel="random"># random</div>
+                    <div class="channel-item hidden" data-channel="staff" id="chan-staff">🛡️ staff-chat</div>
                 </div>
+                
                 <div class="user-panel">
-                    <img id="my-avatar" src="" alt="Avatar" class="avatar clickable">
+                    <img id="my-avatar" class="avatar clickable" title="Click to change avatar">
                     <div class="user-info">
-                        <span id="my-name" class="name"></span>
+                        <span id="my-name" class="name">User</span>
                         <span id="my-role" class="role-badge"></span>
                     </div>
                     <div class="user-actions">
-                        <button id="btn-profile" aria-label="Profile">⚙️</button>
-                        <button id="btn-logout" aria-label="Logout">🚪</button>
+                        <button id="btn-profile" title="Edit Profile">⚙️</button>
+                        <button id="btn-logout">Logout</button>
                     </div>
                 </div>
-            </aside>
+            </div>
 
-            <main class="chat-area">
-                <header class="chat-header glass">
-                    <h3 id="current-channel-name"># general</h3>
+            <div class="chat-area">
+                <div class="chat-header glass">
+                    <span id="current-channel-name"># general</span>
                     <div id="staff-controls" class="hidden">
-                        <button id="btn-mod-broadcast" class="mod-btn hidden">Broadcast</button>
                         <button id="btn-mod-users" class="mod-btn">Users</button>
                         <button id="btn-mod-requests" class="mod-btn">Requests <span id="req-dot" class="dot hidden"></span></button>
+                        <button id="btn-mod-broadcast" class="mod-btn hidden">Broadcast</button>
                     </div>
-                </header>
-                
-                <div id="chat-messages" class="messages-container">
-                    </div>
+                </div>
+
+                <div id="chat-messages" class="messages-container"></div>
 
                 <div class="message-input-area glass">
                     <div id="reply-preview" class="hidden">
                         <span>Replying to <strong id="reply-to-name"></strong></span>
-                        <button id="btn-cancel-reply">❌</button>
+                        <button id="btn-cancel-reply">✕</button>
                     </div>
                     <div class="input-wrapper">
                         <input type="file" id="file-upload" class="hidden">
-                        <button id="btn-upload" aria-label="Upload File">📎</button>
-                        <textarea id="msg-input" placeholder="Message #general..." maxlength="2000"></textarea>
+                        <button id="btn-upload" aria-label="Upload File">+</button>
+                        <textarea id="msg-input" placeholder="Type a message..." rows="1"></textarea>
                         <button id="btn-send" class="primary-btn">Send</button>
                     </div>
                 </div>
-            </main>
+            </div>
         </div>
     </div>
 
     <div id="modal-overlay" class="hidden"></div>
-    
+
     <div id="modal-profile" class="modal glass hidden">
-        <button class="close-modal">✖</button>
-        <h2>Edit Profile</h2>
-        <div class="modal-body">
-            <input type="text" id="edit-display-name" placeholder="Display Name (Max 16)" maxlength="16">
-            <textarea id="edit-bio" placeholder="Bio (Max 750)" maxlength="750"></textarea>
-            <button id="btn-save-profile" class="primary-btn">Save</button>
-        </div>
+        <button class="close-modal">✕</button>
+        <h3>Edit Profile</h3>
+        <input type="text" id="edit-display-name" placeholder="Display Name">
+        <textarea id="edit-bio" placeholder="Bio..." rows="3"></textarea>
+        <button id="btn-save-profile" class="primary-btn">Save Changes</button>
     </div>
 
     <div id="modal-view-user" class="modal glass hidden">
-        <button class="close-modal">✖</button>
+        <button class="close-modal">✕</button>
         <div class="profile-card">
-            <img id="view-user-avatar" src="" class="avatar large">
-            <h2 id="view-user-display"></h2>
-            <p id="view-user-username" class="muted"></p>
+            <img id="view-user-avatar" class="avatar large">
+            <h2 id="view-user-display">Name</h2>
+            <p id="view-user-username" class="text-muted">@username</p>
             <span id="view-user-role" class="role-badge"></span>
-            <p id="view-user-bio" class="bio"></p>
+            <p id="view-user-bio" style="margin-top: 10px;"></p>
+            <div id="view-user-mod-actions" class="mod-actions-grid hidden"></div>
         </div>
-        <div id="view-user-mod-actions" class="hidden mod-actions-grid">
-            </div>
-    </div>
-
-    <div id="modal-block-req" class="modal glass hidden">
-        <button class="close-modal">✖</button>
-        <h2>Request Block</h2>
-        <textarea id="block-req-reason" placeholder="Reason for block..." maxlength="200"></textarea>
-        <button id="btn-submit-block-req" class="danger-btn">Submit Request</button>
-    </div>
-
-    <div id="modal-broadcast" class="modal glass hidden">
-        <button class="close-modal">✖</button>
-        <h2>Broadcast Message</h2>
-        <textarea id="broadcast-msg" placeholder="Enter message..." maxlength="150"></textarea>
-        <input type="number" id="broadcast-duration" min="3" max="20" value="10" placeholder="Duration (sec)">
-        <button id="btn-send-broadcast" class="primary-btn">Send Broadcast</button>
     </div>
 
     <div id="modal-user-manager" class="modal glass hidden">
-        <button class="close-modal">✖</button>
-        <h2>User Manager</h2>
-        <input type="text" id="search-users" placeholder="Search usernames...">
+        <button class="close-modal">✕</button>
+        <h3>User Management</h3>
+        <input type="text" id="search-users" placeholder="Search users...">
         <div id="user-search-results" class="results-list"></div>
     </div>
 
+    <div id="modal-broadcast" class="modal glass hidden">
+        <button class="close-modal">✕</button>
+        <h3>Send Broadcast</h3>
+        <input type="text" id="broadcast-msg" placeholder="Announcement message...">
+        <input type="number" id="broadcast-duration" placeholder="Duration (seconds)" value="10" min="3" max="20">
+        <button id="btn-send-broadcast" class="primary-btn">Broadcast</button>
+    </div>
+
+    <div id="modal-block-req" class="modal glass hidden">
+        <button class="close-modal">✕</button>
+        <h3>Request Block</h3>
+        <textarea id="block-req-reason" placeholder="Reason for blocking user..." rows="3"></textarea>
+        <button id="btn-submit-block-req" class="primary-btn">Submit Request</button>
+    </div>
+
     <div id="modal-req-list" class="modal glass hidden">
-        <button class="close-modal">✖</button>
-        <h2>Block Requests</h2>
+        <button class="close-modal">✕</button>
+        <h3>Pending Block Requests</h3>
         <div id="req-list-container" class="results-list"></div>
     </div>
+
+    <div id="toast-container"></div>
 
     <script type="module" src="app.js"></script>
 </body>
