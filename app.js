@@ -199,7 +199,7 @@ function updateUserInterfaceIdentity() {
     
     const roleBadge = el('my-role');
     if(currentUser.role !== 'user') {
-        const roleEmojis = { owner: '👑', admin: '🛡️', helper: '⭐' };
+        const roleEmojis = { owner: '💻', admin: '🛡', helper: '🛠' };
         roleBadge.innerText = roleEmojis[currentUser.role] || currentUser.role;
         roleBadge.className = `role-badge role-${currentUser.role}`;
     } else { roleBadge.innerText = ""; roleBadge.className="role-badge"; }
@@ -342,11 +342,11 @@ function renderMessage(id, data, shouldScroll = true) {
     let roleBadgeHtml = "";
     const role = data.senderRole || 'user';
     if(role === 'owner') {
-        roleBadgeHtml = `<span title="owner" class="role-badge role-owner" style="font-size:0.7rem; padding:1px 4px;">👑</span>`;
+        roleBadgeHtml = `<span title="owner" class="role-badge role-owner" style="font-size:0.7rem; padding:1px 4px;">💻</span>`;
     } else if(role === 'admin') {
-        roleBadgeHtml = `<span title="admin" class="role-badge role-admin" style="font-size:0.7rem; padding:1px 4px;">🛡️</span>`;
+        roleBadgeHtml = `<span title="admin" class="role-badge role-admin" style="font-size:0.7rem; padding:1px 4px;">🛡</span>`;
     } else if(role === 'helper') {
-        roleBadgeHtml = `<span title="helper" class="role-badge role-helper" style="font-size:0.7rem; padding:1px 4px;">⭐</span>`;
+        roleBadgeHtml = `<span title="helper" class="role-badge role-helper" style="font-size:0.7rem; padding:1px 4px;">🛠</span>`;
     }
 
     const canEdit = data.senderId === currentUser.uid;
@@ -467,7 +467,7 @@ window.viewUser = async (uid) => {
     el('view-user-username').innerText = `@${u.username}`;
     el('view-user-bio').innerText = u.bio;
     
-    const roleEmojis = { owner: '👑', admin: '🛡️', helper: '⭐' };
+    const roleEmojis = { owner: '💻', admin: '🛡', helper: '🛠' };
     el('view-user-role').innerText = u.role !== 'user' ? (roleEmojis[u.role] || u.role) : '';
     el('view-user-role').className = `role-badge role-${u.role}`;
     
@@ -539,7 +539,7 @@ async function searchUsers(q) {
     
     Object.entries(snap.val()).forEach(([uid, u]) => {
         if(u.username.toLowerCase().includes(q) || u.displayName.toLowerCase().includes(q)) {
-            const roleEmojis = { owner: '👑', admin: '🛡️', helper: '⭐' };
+            const roleEmojis = { owner: '💻', admin: '🛡', helper: '🛠' };
             const roleDisplay = u.role !== 'user' ? (roleEmojis[u.role] || u.role) : '';
             const div = document.createElement('div');
             div.className = 'user-row';
