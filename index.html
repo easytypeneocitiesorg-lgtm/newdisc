@@ -3,20 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Algebra Learning & Practice — Equations, Variables & Math</title>
+    <title>The New Discord — Equations, Variables & Math</title>
     <meta name="description" content="Master algebra concepts, linear equations, and mathematical variables with our comprehensive study tools and practice modules.">
     <meta name="keywords" content="Algebra, Algebra lessons, Algebra practice, Equations, Linear equations, Variables, Mathematics, Math learning, Algebra study">
-    <meta property="og:title" content="Algebra Learning & Practice">
+    <meta property="og:title" content="The New Discord">
     <meta property="og:description" content="Learn algebra, linear equations, and mathematics today.">
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Algebra Learning & Practice">
+    <meta name="twitter:title" content="The New Discord">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
+    <!-- AUTH SCREEN -->
     <div id="auth-screen" class="screen">
-        <div class="brand-title">ChatApp</div>
+        <div class="brand-title">The New Discord</div>
         <div id="auth-box" class="glass">
             <h2 id="auth-header">Log In</h2>
             <input type="text" id="auth-username" placeholder="Username (3-16 chars)" autocomplete="off">
@@ -30,6 +31,7 @@
         </div>
     </div>
 
+    <!-- BLOCKED SCREEN -->
     <div id="blocked-screen" class="screen hidden">
         <div class="glass blocked-card">
             <h1>Access Denied</h1>
@@ -37,10 +39,12 @@
         </div>
     </div>
 
+    <!-- MAIN APP INTERFACE -->
     <div id="app-screen" class="screen hidden">
         <div id="broadcast-banner" class="hidden"></div>
         
         <div class="app-layout">
+            <!-- SIDEBAR -->
             <div class="sidebar glass">
                 <div class="sidebar-header">Workspaces</div>
                 <div class="channels">
@@ -62,6 +66,7 @@
                 </div>
             </div>
 
+            <!-- CHAT AREA -->
             <div class="chat-area">
                 <div class="chat-header glass">
                     <span id="current-channel-name"># general</span>
@@ -90,8 +95,10 @@
         </div>
     </div>
 
+    <!-- MODALS -->
     <div id="modal-overlay" class="hidden"></div>
 
+    <!-- Profile Edit Modal -->
     <div id="modal-profile" class="modal glass hidden">
         <button class="close-modal">✕</button>
         <h3>Edit Profile</h3>
@@ -100,6 +107,7 @@
         <button id="btn-save-profile" class="primary-btn">Save Changes</button>
     </div>
 
+    <!-- View User Modal -->
     <div id="modal-view-user" class="modal glass hidden">
         <button class="close-modal">✕</button>
         <div class="profile-card">
@@ -112,6 +120,7 @@
         </div>
     </div>
 
+    <!-- User Manager Modal -->
     <div id="modal-user-manager" class="modal glass hidden">
         <button class="close-modal">✕</button>
         <h3>User Management</h3>
@@ -119,6 +128,7 @@
         <div id="user-search-results" class="results-list"></div>
     </div>
 
+    <!-- Broadcast Modal -->
     <div id="modal-broadcast" class="modal glass hidden">
         <button class="close-modal">✕</button>
         <h3>Send Broadcast</h3>
@@ -127,6 +137,7 @@
         <button id="btn-send-broadcast" class="primary-btn">Broadcast</button>
     </div>
 
+    <!-- Block Request Modal -->
     <div id="modal-block-req" class="modal glass hidden">
         <button class="close-modal">✕</button>
         <h3>Request Block</h3>
@@ -134,12 +145,14 @@
         <button id="btn-submit-block-req" class="primary-btn">Submit Request</button>
     </div>
 
+    <!-- Pending Requests Modal -->
     <div id="modal-req-list" class="modal glass hidden">
         <button class="close-modal">✕</button>
         <h3>Pending Block Requests</h3>
         <div id="req-list-container" class="results-list"></div>
     </div>
 
+    <!-- TOAST CONTAINER -->
     <div id="toast-container"></div>
 
     <script type="module" src="app.js"></script>
