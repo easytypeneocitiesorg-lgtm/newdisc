@@ -1,15 +1,18 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
-import { getDatabase, ref, set, get, push, update, remove, onValue, onChildAdded, onChildChanged, onChildRemoved, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-database.js";
+import { getDatabase, ref, set, get, push, update, remove, onValue, onChildAdded, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-database.js";
 
+// ==========================================
+// 1. FIREBASE CONFIGURATION
+// ==========================================
 const firebaseConfig = {
-  apiKey: "AIzaSyBrFFktufCayJJyiW7owlPQbIWKM1zBbOk",
-  authDomain: "learnalgebramaximus.firebaseapp.com",
-  databaseURL: "https://learnalgebramaximus-default-rtdb.firebaseio.com",
-  projectId: "learnalgebramaximus",
-  storageBucket: "learnalgebramaximus.firebasestorage.app",
-  messagingSenderId: "581042253297",
-  appId: "1:581042253297:web:a1ac31330f78b8e4c76850",
-  measurementId: "G-D7D4G9VE8R"
+    apiKey: "AIzaSyBrFFktufCayJJyiW7owlPQbIWKM1zBbOk",
+    authDomain: "learnalgebramaximus.firebaseapp.com",
+    databaseURL: "https://learnalgebramaximus-default-rtdb.firebaseio.com",
+    projectId: "learnalgebramaximus",
+    storageBucket: "learnalgebramaximus.firebasestorage.app",
+    messagingSenderId: "581042253297",
+    appId: "1:581042253297:web:a1ac31330f78b8e4c76850",
+    measurementId: "G-D7D4G9VE8R"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -22,9 +25,8 @@ let currentUser = null;
 let currentChannel = localStorage.getItem('lastChannel') || 'general';
 let replyingToId = null;
 let editingMsgId = null;
-let msgListeners = [];
 
-const defaultAvatar = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2NjYyI+PHBhdGggZD0iTTEyIDJDMi40OCAyIC0uMDEgNi40OC0uMDEgMTJzNC40OSAxMCAxMC4wMSAxMGM1LjUyIDAgMTAtNC40OCAxMC0xMFMyMC41MiAyIDEyIDJ6bTAgM2MxLjY2IDAgMyAxLjM0IDMgM3MtMS4zNCAzLTMgMy0zLTEuMzQtMy0zIDEuMzQtMyAzLTN6bTAgMTQuMmMtMi41IDAtNC43MS0xLjI4LTYtMy4yMi4wMy0xLjk5IDQtMy4wOCA2LTMuMDhzNS45NyAxLjA5IDYgMy4wOGMtMS4yOSAxLjk0LTMuNSAzLjIyLTYgMy4yMnoiLz48L3N2Zz4=";
+const defaultAvatar = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2NjYyI+PHBhdGggZD0iTTEyIDJDMi40OCAyIC0uogniID48L3N2Zz4=";
 
 const el = (id) => document.getElementById(id);
 const screens = { auth: el('auth-screen'), app: el('app-screen'), blocked: el('blocked-screen') };
@@ -129,7 +131,6 @@ function showScreen(name) {
     screens[name].classList.remove('hidden');
 }
 
-// Session Restore
 window.onload = async () => {
     const uid = localStorage.getItem('tnd_uid');
     if (!uid) return showScreen('auth');
@@ -165,22 +166,19 @@ function initApp() {
         roleBadge.className = `role-badge role-${currentUser.role}`;
     } else { roleBadge.innerText = ""; roleBadge.className="role-badge"; }
 
-    // Role-based UI
     if (['owner', 'admin', 'helper'].includes(currentUser.role)) {
         el('chan-staff').classList.remove('hidden');
         el('staff-controls').classList.remove('hidden');
         if(['owner', 'admin'].includes(currentUser.role)) el('btn-mod-broadcast').classList.remove('hidden');
     }
 
-    // Monitor current user status (blocks/roles/mutes)
     onValue(ref(db, `users/${currentUser.uid}`), (snap) => {
         if(!snap.exists()) return el('btn-logout').click();
         const data = snap.val();
-        if(data.blocked) return window.location.reload(); // Will show blocked screen
+        if(data.blocked) return window.location.reload(); 
         currentUser = { uid: currentUser.uid, ...data };
     });
 
-    // Monitor Broadcasts
     onValue(ref(db, 'broadcast/current'), (snap) => {
         const b = snap.val();
         const banner = el('broadcast-banner');
@@ -191,7 +189,6 @@ function initApp() {
         } else { banner.classList.add('hidden'); }
     });
 
-    // Block Requests Dot
     if(['owner', 'admin'].includes(currentUser.role)) {
         onValue(ref(db, 'blockRequests'), (snap) => {
             el('req-dot').classList.toggle('hidden', !snap.exists());
@@ -219,16 +216,30 @@ function switchChannel(channelId) {
     el('current-channel-name').innerText = `# ${channelId}`;
     
     el('chat-messages').innerHTML = "";
-    msgListeners.forEach(l => l()); // Cleanup old listeners (simulate off())
-    msgListeners = [];
     
     const cRef = ref(db, `messages/${channelId}`);
     
-    const l1 = onChildAdded(cRef, (data) => renderMessage(data.key, data.val()));
-    const l2 = onChildChanged(cRef, (data) => updateMessageUI(data.key, data.val()));
-    const l3 = onChildRemoved(cRef, (data) => removeMessageUI(data.key));
-    
-    msgListeners.push(() => { /* Firebase JS 10+ handles off differently, keeping simple for demo */ });
+    onValue(cRef, (snapshot) => {
+        const container = el('chat-messages');
+        const wasAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
+        
+        container.innerHTML = "";
+        if(snapshot.exists()) {
+            const msgs = snapshot.val();
+            Object.entries(msgs).forEach(([id, data]) => {
+                renderMessage(id, data, false);
+            });
+        }
+        if(wasAtBottom) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }, { onlyOnce: true });
+
+    onChildAdded(cRef, (data) => {
+        if(!el(`msg-${data.key}`)) {
+            renderMessage(data.key, data.val(), true);
+        }
+    });
 }
 
 el('btn-send').onclick = () => sendMessage();
@@ -249,6 +260,7 @@ async function sendMessage(fileData = null) {
         senderUsername: currentUser.username,
         senderDisplay: currentUser.displayName,
         senderAvatar: currentUser.profilePicture,
+        senderRole: currentUser.role || 'user',
         text: text,
         timestamp: serverTimestamp(),
         replyTo: replyingToId,
@@ -274,7 +286,7 @@ el('file-upload').onchange = (e) => {
     const file = e.target.files[0];
     if(!file) return;
     
-    if(file.size > 2 * 1024 * 1024) return showToast("File too large. Max 2MB."); // Limit before Base64 inflation
+    if(file.size > 2 * 1024 * 1024) return showToast("File too large. Max 2MB."); 
     
     const reader = new FileReader();
     reader.onload = (ev) => {
@@ -283,13 +295,15 @@ el('file-upload').onchange = (e) => {
         sendMessage({ name: file.name, type: file.type, data: base64Str, size: file.size });
     };
     reader.readAsDataURL(file);
-    el('file-upload').value = ""; // Reset
+    el('file-upload').value = ""; 
 };
 
 // ==========================================
 // 8. MESSAGE RENDERING
 // ==========================================
-function renderMessage(id, data) {
+function renderMessage(id, data, shouldScroll = true) {
+    if(el(`msg-${id}`)) return;
+
     const div = document.createElement('div');
     div.className = 'message';
     div.id = `msg-${id}`;
@@ -309,6 +323,16 @@ function renderMessage(id, data) {
     let replyHtml = "";
     if(data.replyTo) replyHtml = `<div class="reply-ref" onclick="document.getElementById('msg-${data.replyTo}')?.scrollIntoView()">Replying to a message...</div>`;
 
+    let roleEmojiHtml = "";
+    const role = data.senderRole || 'user';
+    if(role === 'owner') {
+        roleEmojiHtml = `<span title="owner" style="cursor:help; margin-left:2px;">💻</span>`;
+    } else if(role === 'admin') {
+        roleEmojiHtml = `<span title="admin" style="cursor:help; margin-left:2px;">🛡️</span>`;
+    } else if(role === 'helper') {
+        roleEmojiHtml = `<span title="helper" style="cursor:help; margin-left:2px;">🛠️</span>`;
+    }
+
     const canEdit = data.senderId === currentUser.uid;
     const canDel = canEdit || ['owner', 'admin', 'helper'].includes(currentUser.role);
 
@@ -318,6 +342,7 @@ function renderMessage(id, data) {
             ${replyHtml}
             <div class="msg-header">
                 <span class="msg-name" onclick="viewUser('${data.senderId}')">${sanitize(data.senderDisplay)}</span>
+                ${roleEmojiHtml}
                 <span class="msg-time">${timeStr}</span>
                 ${data.edited ? '<span class="msg-edited">(edited)</span>' : ''}
             </div>
@@ -334,25 +359,11 @@ function renderMessage(id, data) {
     const container = el('chat-messages');
     container.appendChild(div);
     
-    // Auto-scroll logic (scroll if near bottom)
-    if(container.scrollHeight - container.scrollTop < container.clientHeight + 100) {
-        container.scrollTop = container.scrollHeight;
-    }
-}
-
-function updateMessageUI(id, data) {
-    const msg = el(`msg-${id}`);
-    if(msg) {
-        msg.querySelector('.msg-text').innerText = data.text;
-        if(data.edited && !msg.innerHTML.includes('(edited)')) {
-            msg.querySelector('.msg-header').innerHTML += '<span class="msg-edited">(edited)</span>';
+    if(shouldScroll) {
+        if(container.scrollHeight - container.scrollTop < container.clientHeight + 150) {
+            container.scrollTop = container.scrollHeight;
         }
     }
-}
-
-function removeMessageUI(id) {
-    const msg = el(`msg-${id}`);
-    if(msg) msg.remove();
 }
 
 window.replyTo = (id, name) => {
@@ -444,7 +455,6 @@ window.viewUser = async (uid) => {
         if(isStaff) {
             actions.classList.remove('hidden');
             
-            // Block Logic
             if(['owner', 'admin'].includes(currentUser.role)) {
                 actions.innerHTML += `<button class="danger-btn" onclick="modAction('${uid}', 'block', ${!u.blocked})">${u.blocked ? 'Unblock' : 'Block'}</button>`;
                 actions.innerHTML += `<button class="danger-btn" onclick="modAction('${uid}', 'mute')">Mute 10m</button>`;
@@ -452,7 +462,6 @@ window.viewUser = async (uid) => {
                 actions.innerHTML += `<button class="danger-btn" onclick="openBlockReq('${uid}')">Req Block</button>`;
             }
 
-            // Role Logic (Owner Only)
             if(currentUser.role === 'owner') {
                 if(u.role === 'user') {
                     actions.innerHTML += `<button class="primary-btn" onclick="modAction('${uid}', 'role', 'helper')">Make Helper</button>`;
@@ -493,7 +502,6 @@ window.modAction = async (uid, action, val = null) => {
     showToast(`Action ${action} completed.`);
 };
 
-// User Manager
 el('btn-mod-users').onclick = () => { openModal('modal-user-manager'); searchUsers(""); };
 el('search-users').oninput = (e) => searchUsers(e.target.value.toLowerCase());
 
@@ -509,7 +517,7 @@ async function searchUsers(q) {
             const div = document.createElement('div');
             div.className = 'user-row';
             div.innerHTML = `<div style="display:flex;gap:10px;align-items:center;">
-                <img src="${u.profilePicture}" class="avatar" style="width:24px;height:24px;">
+                <img src="${u.profilePicture}" class="avatar" style="width:24px;height:24px;min-width:24px;min-height:24px;">
                 <span>${sanitize(u.username)}</span>
             </div> <span>${u.role}</span>`;
             div.onclick = () => viewUser(uid);
@@ -518,7 +526,6 @@ async function searchUsers(q) {
     });
 }
 
-// Broadcast
 if(el('btn-mod-broadcast')) {
     el('btn-mod-broadcast').onclick = () => openModal('modal-broadcast');
     el('btn-send-broadcast').onclick = async () => {
@@ -537,7 +544,6 @@ if(el('btn-mod-broadcast')) {
     };
 }
 
-// Block Requests
 let tempReqUid = null;
 window.openBlockReq = (uid) => { tempReqUid = uid; closeModals(); openModal('modal-block-req'); };
 
@@ -585,5 +591,5 @@ el('btn-mod-requests').onclick = async () => {
 window.resolveReq = async (reqId, targetUid, accept) => {
     if(accept) await update(ref(db, `users/${targetUid}`), { blocked: true });
     await remove(ref(db, `blockRequests/${reqId}`));
-    el('btn-mod-requests').click(); // Refresh list
+    el('btn-mod-requests').click(); 
 };
