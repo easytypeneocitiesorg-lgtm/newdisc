@@ -25,6 +25,7 @@ let currentUser = null;
 let currentChannel = localStorage.getItem('lastChannel') || 'general';
 let replyingToId = null;
 let editingMsgId = null;
+let loadedMessagesCache = {};
 
 const defaultAvatar = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2NjYyI+PHBhdGggZD0iTTEyIDJDMi40OCAyIC0uogniID48L3N2Zz4=";
 
@@ -157,14 +158,7 @@ el('btn-logout').onclick = () => {
 // ==========================================
 function initApp() {
     showScreen('app');
-    el('my-avatar').src = currentUser.profilePicture;
-    el('my-name').innerText = currentUser.displayName;
-    
-    const roleBadge = el('my-role');
-    if(currentUser.role !== 'user') {
-        roleBadge.innerText = currentUser.role;
-        roleBadge.className = `role-badge role-${currentUser.role}`;
-    } else { roleBadge.innerText = ""; roleBadge.className="role-badge"; }
+    updateUserInterfaceIdentity();
 
     if (['owner', 'admin', 'helper'].includes(currentUser.role)) {
         el('chan-staff').classList.remove('hidden');
@@ -177,6 +171,7 @@ function initApp() {
         const data = snap.val();
         if(data.blocked) return window.location.reload(); 
         currentUser = { uid: currentUser.uid, ...data };
+        updateUserInterfaceIdentity();
     });
 
     onValue(ref(db, 'broadcast/current'), (snap) => {
@@ -198,6 +193,17 @@ function initApp() {
     switchChannel(currentChannel);
 }
 
+function updateUserInterfaceIdentity() {
+    el('my-avatar').src = currentUser.profilePicture;
+    el('my-name').innerText = currentUser.displayName;
+    
+    const roleBadge = el('my-role');
+    if(currentUser.role !== 'user') {
+        roleBadge.innerText = currentUser.role;
+        roleBadge.className = `role-badge role-${currentUser.role}`;
+    } else { roleBadge.innerText = ""; roleBadge.className="role-badge"; }
+}
+
 // ==========================================
 // 6. CHANNEL & MESSAGING
 // ==========================================
@@ -216,6 +222,7 @@ function switchChannel(channelId) {
     el('current-channel-name').innerText = `# ${channelId}`;
     
     el('chat-messages').innerHTML = "";
+    loadedMessagesCache = {};
     
     const cRef = ref(db, `messages/${channelId}`);
     
@@ -224,9 +231,12 @@ function switchChannel(channelId) {
         const wasAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
         
         container.innerHTML = "";
+        loadedMessagesCache = {};
+        
         if(snapshot.exists()) {
             const msgs = snapshot.val();
             Object.entries(msgs).forEach(([id, data]) => {
+                loadedMessagesCache[id] = data;
                 renderMessage(id, data, false);
             });
         }
@@ -236,6 +246,7 @@ function switchChannel(channelId) {
     }, { onlyOnce: true });
 
     onChildAdded(cRef, (data) => {
+        loadedMessagesCache[data.key] = data.val();
         if(!el(`msg-${data.key}`)) {
             renderMessage(data.key, data.val(), true);
         }
@@ -321,16 +332,20 @@ function renderMessage(id, data, shouldScroll = true) {
     }
 
     let replyHtml = "";
-    if(data.replyTo) replyHtml = `<div class="reply-ref" onclick="document.getElementById('msg-${data.replyTo}')?.scrollIntoView()">Replying to a message...</div>`;
+    if(data.replyTo) {
+        const parentMsg = loadedMessagesCache[data.replyTo];
+        const previewSnippet = parentMsg ? (parentMsg.text || (parentMsg.file ? `[File: ${parentMsg.file.name}]` : "Original message")) : "Original message";
+        replyHtml = `<div class="reply-ref" onclick="document.getElementById('msg-${data.replyTo}')?.scrollIntoView()">Replying to: "${sanitize(previewSnippet)}"</div>`;
+    }
 
-    let roleEmojiHtml = "";
+    let roleBadgeHtml = "";
     const role = data.senderRole || 'user';
     if(role === 'owner') {
-        roleEmojiHtml = `<span title="owner" style="cursor:help; margin-left:2px;">💻</span>`;
+        roleBadgeHtml = `<span title="owner" class="role-badge role-owner" style="font-size:0.6rem; padding:1px 4px;">owner</span>`;
     } else if(role === 'admin') {
-        roleEmojiHtml = `<span title="admin" style="cursor:help; margin-left:2px;">🛡️</span>`;
+        roleBadgeHtml = `<span title="admin" class="role-badge role-admin" style="font-size:0.6rem; padding:1px 4px;">admin</span>`;
     } else if(role === 'helper') {
-        roleEmojiHtml = `<span title="helper" style="cursor:help; margin-left:2px;">🛠️</span>`;
+        roleBadgeHtml = `<span title="helper" class="role-badge role-helper" style="font-size:0.6rem; padding:1px 4px;">helper</span>`;
     }
 
     const canEdit = data.senderId === currentUser.uid;
@@ -342,7 +357,7 @@ function renderMessage(id, data, shouldScroll = true) {
             ${replyHtml}
             <div class="msg-header">
                 <span class="msg-name" onclick="viewUser('${data.senderId}')">${sanitize(data.senderDisplay)}</span>
-                ${roleEmojiHtml}
+                ${roleBadgeHtml}
                 <span class="msg-time">${timeStr}</span>
                 ${data.edited ? '<span class="msg-edited">(edited)</span>' : ''}
             </div>
@@ -350,9 +365,9 @@ function renderMessage(id, data, shouldScroll = true) {
             ${fileHtml}
         </div>
         <div class="msg-actions">
-            <button onclick="replyTo('${id}', '${sanitize(data.senderDisplay)}')">↩️</button>
-            ${canEdit ? `<button onclick="editMsg('${id}', \`${sanitize(data.text)}\`)">✏️</button>` : ''}
-            ${canDel ? `<button onclick="delMsg('${id}')">🗑️</button>` : ''}
+            <button class="text-action-btn" onclick="replyTo('${id}', '${sanitize(data.senderDisplay)}', \`${sanitize(data.text || (data.file ? data.file.name : 'attachment'))}\`)">Reply</button>
+            ${canEdit ? `<button class="text-action-btn" onclick="editMsg('${id}', \`${sanitize(data.text)}\`)">Edit</button>` : ''}
+            ${canDel ? `<button class="text-action-btn" style="color:var(--danger);" onclick="delMsg('${id}')">Delete</button>` : ''}
         </div>
     `;
 
@@ -366,10 +381,11 @@ function renderMessage(id, data, shouldScroll = true) {
     }
 }
 
-window.replyTo = (id, name) => {
+window.replyTo = (id, name, text) => {
     replyingToId = id;
     el('reply-preview').classList.remove('hidden');
     el('reply-to-name').innerText = name;
+    el('reply-to-text').innerText = text.length > 40 ? text.substring(0, 40) + '...' : text;
     el('msg-input').focus();
 };
 
@@ -419,7 +435,9 @@ el('my-avatar').onclick = () => {
         reader.onload = async (ev) => {
             const b64 = ev.target.result;
             await update(ref(db, `users/${currentUser.uid}`), { profilePicture: b64 });
-            showToast("Avatar updated!");
+            currentUser.profilePicture = b64;
+            updateUserInterfaceIdentity();
+            showToast("Avatar updated successfully!");
         };
         reader.readAsDataURL(f);
     };
@@ -431,7 +449,11 @@ el('btn-save-profile').onclick = async () => {
     const bio = el('edit-bio').value.trim();
     if(name.length > 16) return showToast("Name max 16 chars.");
     await update(ref(db, `users/${currentUser.uid}`), { displayName: name || currentUser.username, bio: bio });
+    currentUser.displayName = name || currentUser.username;
+    currentUser.bio = bio;
+    updateUserInterfaceIdentity();
     closeModals();
+    showToast("Profile updated!");
 };
 
 window.viewUser = async (uid) => {
