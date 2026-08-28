@@ -15,7 +15,6 @@
 </head>
 <body>
 
-    <!-- AUTH SCREEN -->
     <div id="auth-screen" class="screen">
         <div class="brand-title">The New Discord</div>
         <div id="auth-box" class="glass">
@@ -31,7 +30,6 @@
         </div>
     </div>
 
-    <!-- BLOCKED SCREEN -->
     <div id="blocked-screen" class="screen hidden">
         <div class="glass blocked-card">
             <h1>Access Denied</h1>
@@ -39,18 +37,16 @@
         </div>
     </div>
 
-    <!-- MAIN APP INTERFACE -->
     <div id="app-screen" class="screen hidden">
         <div id="broadcast-banner" class="hidden"></div>
         
         <div class="app-layout">
-            <!-- SIDEBAR -->
             <div class="sidebar glass">
                 <div class="sidebar-header">Workspaces</div>
                 <div class="channels">
                     <div class="channel-item active" data-channel="general"># general</div>
                     <div class="channel-item" data-channel="random"># random</div>
-                    <div class="channel-item hidden" data-channel="staff" id="chan-staff">🛡️ staff-chat</div>
+                    <div class="channel-item hidden" data-channel="staff" id="chan-staff">staff-chat</div>
                 </div>
                 
                 <div class="user-panel">
@@ -60,13 +56,12 @@
                         <span id="my-role" class="role-badge"></span>
                     </div>
                     <div class="user-actions">
-                        <button id="btn-profile" title="Edit Profile">⚙️</button>
-                        <button id="btn-logout">Logout</button>
+                        <button id="btn-profile" class="text-action-btn" title="Edit Profile">Settings</button>
+                        <button id="btn-logout" class="text-action-btn">Logout</button>
                     </div>
                 </div>
             </div>
 
-            <!-- CHAT AREA -->
             <div class="chat-area">
                 <div class="chat-header glass">
                     <span id="current-channel-name"># general</span>
@@ -81,12 +76,12 @@
 
                 <div class="message-input-area glass">
                     <div id="reply-preview" class="hidden">
-                        <span>Replying to <strong id="reply-to-name"></strong></span>
-                        <button id="btn-cancel-reply">✕</button>
+                        <span>Replying to <strong id="reply-to-name"></strong>: "<span id="reply-to-text"></span>"</span>
+                        <button id="btn-cancel-reply" class="text-action-btn">Cancel</button>
                     </div>
                     <div class="input-wrapper">
                         <input type="file" id="file-upload" class="hidden">
-                        <button id="btn-upload" aria-label="Upload File">+</button>
+                        <button id="btn-upload" class="text-action-btn" aria-label="Upload File">Upload</button>
                         <textarea id="msg-input" placeholder="Type a message..." rows="1"></textarea>
                         <button id="btn-send" class="primary-btn">Send</button>
                     </div>
@@ -95,10 +90,8 @@
         </div>
     </div>
 
-    <!-- MODALS -->
     <div id="modal-overlay" class="hidden"></div>
 
-    <!-- Profile Edit Modal -->
     <div id="modal-profile" class="modal glass hidden">
         <button class="close-modal">✕</button>
         <h3>Edit Profile</h3>
@@ -107,7 +100,6 @@
         <button id="btn-save-profile" class="primary-btn">Save Changes</button>
     </div>
 
-    <!-- View User Modal -->
     <div id="modal-view-user" class="modal glass hidden">
         <button class="close-modal">✕</button>
         <div class="profile-card">
@@ -120,7 +112,6 @@
         </div>
     </div>
 
-    <!-- User Manager Modal -->
     <div id="modal-user-manager" class="modal glass hidden">
         <button class="close-modal">✕</button>
         <h3>User Management</h3>
@@ -128,7 +119,6 @@
         <div id="user-search-results" class="results-list"></div>
     </div>
 
-    <!-- Broadcast Modal -->
     <div id="modal-broadcast" class="modal glass hidden">
         <button class="close-modal">✕</button>
         <h3>Send Broadcast</h3>
@@ -137,7 +127,6 @@
         <button id="btn-send-broadcast" class="primary-btn">Broadcast</button>
     </div>
 
-    <!-- Block Request Modal -->
     <div id="modal-block-req" class="modal glass hidden">
         <button class="close-modal">✕</button>
         <h3>Request Block</h3>
@@ -145,14 +134,12 @@
         <button id="btn-submit-block-req" class="primary-btn">Submit Request</button>
     </div>
 
-    <!-- Pending Requests Modal -->
     <div id="modal-req-list" class="modal glass hidden">
         <button class="close-modal">✕</button>
         <h3>Pending Block Requests</h3>
         <div id="req-list-container" class="results-list"></div>
     </div>
 
-    <!-- TOAST CONTAINER -->
     <div id="toast-container"></div>
 
     <script type="module" src="app.js"></script>
