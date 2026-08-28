@@ -199,7 +199,8 @@ function updateUserInterfaceIdentity() {
     
     const roleBadge = el('my-role');
     if(currentUser.role !== 'user') {
-        roleBadge.innerText = currentUser.role;
+        const roleEmojis = { owner: '👑', admin: '🛡️', helper: '⭐' };
+        roleBadge.innerText = roleEmojis[currentUser.role] || currentUser.role;
         roleBadge.className = `role-badge role-${currentUser.role}`;
     } else { roleBadge.innerText = ""; roleBadge.className="role-badge"; }
 }
@@ -341,11 +342,11 @@ function renderMessage(id, data, shouldScroll = true) {
     let roleBadgeHtml = "";
     const role = data.senderRole || 'user';
     if(role === 'owner') {
-        roleBadgeHtml = `<span title="owner" class="role-badge role-owner" style="font-size:0.6rem; padding:1px 4px;">owner</span>`;
+        roleBadgeHtml = `<span title="owner" class="role-badge role-owner" style="font-size:0.7rem; padding:1px 4px;">👑</span>`;
     } else if(role === 'admin') {
-        roleBadgeHtml = `<span title="admin" class="role-badge role-admin" style="font-size:0.6rem; padding:1px 4px;">admin</span>`;
+        roleBadgeHtml = `<span title="admin" class="role-badge role-admin" style="font-size:0.7rem; padding:1px 4px;">🛡️</span>`;
     } else if(role === 'helper') {
-        roleBadgeHtml = `<span title="helper" class="role-badge role-helper" style="font-size:0.6rem; padding:1px 4px;">helper</span>`;
+        roleBadgeHtml = `<span title="helper" class="role-badge role-helper" style="font-size:0.7rem; padding:1px 4px;">⭐</span>`;
     }
 
     const canEdit = data.senderId === currentUser.uid;
@@ -365,9 +366,9 @@ function renderMessage(id, data, shouldScroll = true) {
             ${fileHtml}
         </div>
         <div class="msg-actions">
-            <button class="text-action-btn" onclick="replyTo('${id}', '${sanitize(data.senderDisplay)}', \`${sanitize(data.text || (data.file ? data.file.name : 'attachment'))}\`)">Reply</button>
-            ${canEdit ? `<button class="text-action-btn" onclick="editMsg('${id}', \`${sanitize(data.text)}\`)">Edit</button>` : ''}
-            ${canDel ? `<button class="text-action-btn" style="color:var(--danger);" onclick="delMsg('${id}')">Delete</button>` : ''}
+            <button class="text-action-btn" onclick="replyTo('${id}', '${sanitize(data.senderDisplay)}', \`${sanitize(data.text || (data.file ? data.file.name : 'attachment'))}\`)">reply</button>
+            ${canEdit ? `<button class="text-action-btn" onclick="editMsg('${id}', \`${sanitize(data.text)}\`)">edit</button>` : ''}
+            ${canDel ? `<button class="text-action-btn" style="color:var(--danger);" onclick="delMsg('${id}')">delete</button>` : ''}
         </div>
     `;
 
@@ -465,7 +466,9 @@ window.viewUser = async (uid) => {
     el('view-user-display').innerText = u.displayName;
     el('view-user-username').innerText = `@${u.username}`;
     el('view-user-bio').innerText = u.bio;
-    el('view-user-role').innerText = u.role !== 'user' ? u.role : '';
+    
+    const roleEmojis = { owner: '👑', admin: '🛡️', helper: '⭐' };
+    el('view-user-role').innerText = u.role !== 'user' ? (roleEmojis[u.role] || u.role) : '';
     el('view-user-role').className = `role-badge role-${u.role}`;
     
     const actions = el('view-user-mod-actions');
@@ -536,12 +539,14 @@ async function searchUsers(q) {
     
     Object.entries(snap.val()).forEach(([uid, u]) => {
         if(u.username.toLowerCase().includes(q) || u.displayName.toLowerCase().includes(q)) {
+            const roleEmojis = { owner: '👑', admin: '🛡️', helper: '⭐' };
+            const roleDisplay = u.role !== 'user' ? (roleEmojis[u.role] || u.role) : '';
             const div = document.createElement('div');
             div.className = 'user-row';
             div.innerHTML = `<div style="display:flex;gap:10px;align-items:center;">
                 <img src="${u.profilePicture}" class="avatar" style="width:24px;height:24px;min-width:24px;min-height:24px;">
                 <span>${sanitize(u.username)}</span>
-            </div> <span>${u.role}</span>`;
+            </div> <span>${roleDisplay}</span>`;
             div.onclick = () => viewUser(uid);
             container.appendChild(div);
         }
