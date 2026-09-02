@@ -117,13 +117,16 @@
               <button id="mobile-sidebar-btn" class="icon-btn mobile-only" aria-label="Open sidebar">Menu</button>
               <span id="channel-name-display" class="channel-name">#general</span>
               
-              <!-- DM Actions (Block, Add User) -->
+              <!-- DM Actions (Block / Leave Group, Add User) -->
               <div id="dm-header-actions" class="hidden" style="display: flex; gap: 8px; margin-left: 10px;">
                 <button id="dm-block-btn" class="btn btn-danger" style="padding: 4px 10px; font-size: 12px;">Block</button>
-                <button id="dm-add-user-btn" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;">Add People</button>
+                <button id="dm-add-user-btn" class="btn btn-secondary hidden" style="padding: 4px 10px; font-size: 12px;">Add People</button>
               </div>
             </div>
-            <div class="chat-header-right" id="staff-controls"></div>
+            <div class="chat-header-right" id="staff-controls">
+              <!-- DMs Tab Button positioned to the right of search bar / header area -->
+              <button id="dms-tab-btn" class="icon-btn" onclick="switchChannel('dms_home')" style="font-weight: 600;">@ DMs</button>
+            </div>
           </header>
 
           <!-- DM Home View (Search & Start DM) -->
@@ -175,7 +178,6 @@
 
   <!-- ======================= MODALS ======================= -->
   <div id="modal-overlay" class="modal-overlay hidden">
-    <!-- Profile, Staff, Broadcast, etc. (Preserved exactly as original, plus DM Add modal) -->
     
     <!-- Add to DM Modal -->
     <div id="modal-add-to-dm" class="modal glass hidden">
@@ -189,7 +191,6 @@
       </div>
     </div>
 
-    <!-- The rest of the original modals -->
     <div id="modal-profile" class="modal glass hidden">
       <div class="modal-header">
         <h2>Edit Profile</h2>
