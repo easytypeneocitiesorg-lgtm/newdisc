@@ -10,10 +10,9 @@
 </head>
 <body>
 
-  <!-- ======================= APP ROOT ======================= -->
   <div id="app-root">
 
-    <!-- ---------- LOADING SCREEN ---------- -->
+    <!-- Loading -->
     <div id="loading-screen" class="screen">
       <div class="loading-brand">
         <div class="logo-mark">TND</div>
@@ -22,7 +21,7 @@
       </div>
     </div>
 
-    <!-- ---------- AUTH SCREEN ---------- -->
+    <!-- Auth -->
     <div id="auth-screen" class="screen hidden">
       <div class="auth-card glass">
         <div class="auth-brand">
@@ -30,12 +29,10 @@
           <h1>The New Discord</h1>
           <p class="auth-subtitle">Real-time chat for your community</p>
         </div>
-
         <div class="auth-tabs">
           <button id="tab-login" class="auth-tab active" type="button">Log In</button>
           <button id="tab-signup" class="auth-tab" type="button">Create Account</button>
         </div>
-
         <form id="auth-form" class="auth-form" autocomplete="off">
           <label class="field-label" for="auth-username">Username</label>
           <input id="auth-username" class="field-input" type="text" maxlength="16" placeholder="3-16 characters, letters/numbers/_" autocomplete="username" />
@@ -50,7 +47,7 @@
       </div>
     </div>
 
-    <!-- ---------- BLOCKED SCREEN ---------- -->
+    <!-- Blocked -->
     <div id="blocked-screen" class="screen hidden">
       <div class="blocked-card glass">
         <div class="blocked-icon">⛔</div>
@@ -60,36 +57,26 @@
       </div>
     </div>
 
-    <!-- ---------- MAIN APPLICATION ---------- -->
+    <!-- Main App -->
     <div id="main-app" class="screen hidden">
-
-      <!-- Broadcast banner -->
       <div id="broadcast-banner" class="broadcast-banner hidden">
         <span id="broadcast-text"></span>
       </div>
 
       <div class="app-shell">
-
-        <!-- ============ SIDEBAR ============ -->
+        <!-- Sidebar -->
         <aside id="sidebar" class="sidebar glass">
           <div class="sidebar-header">
             <div class="logo-mark small">TND</div>
             <span class="sidebar-title">The New Discord</span>
             <button id="sidebar-toggle" class="icon-btn mobile-only" aria-label="Toggle sidebar">Menu</button>
           </div>
-
           <div class="connection-status" id="connection-status">
             <span class="status-dot" id="status-dot"></span>
             <span id="status-label">Connecting…</span>
           </div>
-
-          <nav class="channel-list" id="channel-list" aria-label="Channels">
-            <!-- Channels injected by app.js -->
-          </nav>
-
+          <nav class="channel-list" id="channel-list" aria-label="Channels"></nav>
           <div class="sidebar-spacer"></div>
-
-          <!-- Bottom-left user panel -->
           <div class="user-panel" id="user-panel">
             <button id="user-panel-avatar-btn" class="user-avatar-btn" aria-label="Change profile picture">
               <img id="user-panel-avatar" class="avatar" src="" alt="Your avatar" />
@@ -105,28 +92,25 @@
           </div>
         </aside>
 
-        <!-- ============ CHAT AREA ============ -->
+        <!-- Chat Area -->
         <main class="chat-area">
-
           <header class="chat-header glass">
             <div class="chat-header-left">
               <button id="mobile-sidebar-btn" class="icon-btn mobile-only" aria-label="Open sidebar">Menu</button>
               <span id="channel-name-display" class="channel-name">#general</span>
-              
-              <!-- DM Actions (Block / Leave Group + Add People) -->
-              <div id="dm-header-actions" class="hidden" style="display: flex; gap: 8px; margin-left: 10px;">
-                <button id="dm-block-btn" class="btn btn-danger" style="padding: 4px 10px; font-size: 12px;">Block</button>
-                <button id="dm-leave-btn" class="btn btn-danger hidden" style="padding: 4px 10px; font-size: 12px;">Leave Group</button>
-                <button id="dm-add-user-btn" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;">Add People</button>
+              <div id="dm-header-actions" class="hidden" style="display:flex;gap:8px;margin-left:10px;">
+                <button id="dm-block-btn" class="btn btn-danger" style="padding:4px 10px;font-size:12px;">Block</button>
+                <button id="dm-leave-btn" class="btn btn-danger hidden" style="padding:4px 10px;font-size:12px;">Leave Group</button>
+                <button id="dm-add-user-btn" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;">Add People</button>
               </div>
             </div>
             <div class="chat-header-right" id="staff-controls"></div>
           </header>
 
-          <!-- DM Home View (Search + DM list side-by-side) -->
+          <!-- DM Home -->
           <div id="dm-home-view" class="hidden">
             <h2>Direct Messages</h2>
-            <p style="color: var(--text-muted); margin-bottom: 15px;">Search for a user to start a DM or scroll to find someone.</p>
+            <p style="color:var(--text-muted);margin-bottom:15px;">Search for a user to start a DM or scroll to find someone.</p>
             <div class="dm-home-layout">
               <div class="dm-home-search-col">
                 <input type="text" id="dm-start-search" class="field-input" placeholder="Search username or display name..." />
@@ -160,10 +144,8 @@
             <button id="cancel-reply-btn" class="icon-btn" aria-label="Cancel reply">Cancel</button>
           </div>
 
-          <!-- Typing Indicator -->
           <div id="typing-indicator" class="typing-indicator hidden"></div>
 
-          <!-- Composer -->
           <div class="composer" id="message-composer">
             <button id="file-upload-btn" class="icon-btn composer-icon" aria-label="Upload file" title="Upload file">Upload</button>
             <input id="file-input" type="file" class="hidden" />
@@ -176,12 +158,12 @@
     </div>
   </div>
 
-  <!-- Hidden avatar file input -->
+  <!-- Hidden avatar input -->
   <input id="avatar-input" type="file" accept="image/*" class="hidden" />
 
-  <!-- ======================= MODALS ======================= -->
+  <!-- Modals -->
   <div id="modal-overlay" class="modal-overlay hidden">
-    <!-- Add to DM Modal -->
+
     <div id="modal-add-to-dm" class="modal glass hidden">
       <div class="modal-header">
         <h2>Add People to DM</h2>
@@ -189,7 +171,7 @@
       </div>
       <div class="modal-body">
         <input type="text" id="dm-add-search" class="field-input" placeholder="Search username or display name..." />
-        <div id="dm-add-results" class="search-dropdown-results" style="margin-top: 10px;"></div>
+        <div id="dm-add-results" class="search-dropdown-results" style="margin-top:10px;"></div>
       </div>
     </div>
 
