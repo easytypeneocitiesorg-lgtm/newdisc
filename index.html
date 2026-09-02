@@ -117,25 +117,26 @@
               <button id="mobile-sidebar-btn" class="icon-btn mobile-only" aria-label="Open sidebar">Menu</button>
               <span id="channel-name-display" class="channel-name">#general</span>
               
-              <!-- DM Actions (Block / Leave Group, Add User) -->
+              <!-- DM Actions (Block/Leave, Add User) -->
               <div id="dm-header-actions" class="hidden" style="display: flex; gap: 8px; margin-left: 10px;">
                 <button id="dm-block-btn" class="btn btn-danger" style="padding: 4px 10px; font-size: 12px;">Block</button>
-                <button id="dm-add-user-btn" class="btn btn-secondary hidden" style="padding: 4px 10px; font-size: 12px;">Add People</button>
+                <button id="dm-add-user-btn" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;">Add People</button>
               </div>
             </div>
-            <div class="chat-header-right" id="staff-controls">
-              <!-- DMs Tab Button positioned to the right of search bar / header area -->
-              <button id="dms-tab-btn" class="icon-btn" onclick="switchChannel('dms_home')" style="font-weight: 600;">@ DMs</button>
-            </div>
+            <div class="chat-header-right" id="staff-controls"></div>
           </header>
 
           <!-- DM Home View (Search & Start DM) -->
           <div id="dm-home-view" class="hidden" style="padding: 20px; flex: 1; overflow-y: auto;">
-            <h2>Direct Messages</h2>
-            <p style="color: var(--text-muted); margin-bottom: 15px;">Search for a user to start a DM or scroll to find someone.</p>
-            <div style="position: relative; max-width: 400px;">
-              <input type="text" id="dm-start-search" class="field-input" placeholder="Search username or display name..." />
-              <div id="dm-start-results" class="search-dropdown-results"></div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+              <div>
+                <h2>Direct Messages</h2>
+                <p style="color: var(--text-muted); margin: 0;">Search for a user to start a DM or scroll to find someone.</p>
+              </div>
+              <div style="position: relative; width: 300px;">
+                <input type="text" id="dm-start-search" class="field-input" placeholder="Search direct messages..." />
+                <div id="dm-start-results" class="search-dropdown-results"></div>
+              </div>
             </div>
           </div>
 
