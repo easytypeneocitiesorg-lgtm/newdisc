@@ -65,7 +65,7 @@ const el = {
   channelNameDisplay: $("channel-name-display"), staffControls: $("staff-controls"), messagesScroll: $("messages-scroll"), messagesList: $("messages-list"), emptyChannelState: $("empty-channel-state"), newMessagesBtn: $("new-messages-btn"),
   muteNotice: $("mute-notice"), muteRemaining: $("mute-remaining"), replyPreview: $("reply-preview"), replyPreviewName: $("reply-preview-name"), replyPreviewSnippet: $("reply-preview-snippet"), cancelReplyBtn: $("cancel-reply-btn"),
   fileUploadBtn: $("file-upload-btn"), fileInput: $("file-input"), messageInput: $("message-input"), sendBtn: $("send-btn"), filePreview: $("file-preview"), messageComposer: $("message-composer"),
-  typingIndicator: $("typing-indicator"), dmHomeView: $("dm-home-view"), dmStartSearch: $("dm-start-search"), dmStartResults: $("dm-start-results"), dmHeaderActions: $("dm-header-actions"), dmBlockBtn: $("dm-block-btn"), dmAddUserBtn: $("dm-add-user-btn"), dmAddSearch: $("dm-add-search"), dmAddResults: $("dm-add-results"),
+  typingIndicator: $("typing-indicator"), dmHomeView: $("dm-home-view"), dmStartSearch: $("dm-start-search"), dmStartResults: $("dm-start-results"), dmHeaderActions: $("dm-header-actions"), dmBlockBtn: $("dm-block-btn"), dmLeaveBtn: $("dm-leave-btn"), dmAddUserBtn: $("dm-add-user-btn"), dmAddSearch: $("dm-add-search"), dmAddResults: $("dm-add-results"),
   modalOverlay: $("modal-overlay"), modalProfile: $("modal-profile"), profileDisplayName: $("profile-display-name"), profileBio: $("profile-bio"), dnCounter: $("dn-counter"), bioCounter: $("bio-counter"), profileError: $("profile-error"), profileSaveBtn: $("profile-save-btn"),
   modalViewProfile: $("modal-view-profile"), vpAvatar: $("vp-avatar"), vpDisplayName: $("vp-display-name"), vpUsername: $("vp-username"), vpRole: $("vp-role"), vpBio: $("vp-bio"),
   modalStaffMenu: $("modal-staff-menu"), staffBroadcastBtn: $("staff-broadcast-btn"), staffUsermanagerBtn: $("staff-usermanager-btn"), staffBlockrequestsBtn: $("staff-blockrequests-btn"), blockRequestsDot: $("block-requests-dot"),
@@ -253,7 +253,7 @@ function renderChannelList() {
     el.channelList.appendChild(btn);
   }
   
-  // DMs Tab Pseudo-Channel located directly under staff chat channel
+  // DMs Tab Pseudo-Channel
   const dmsBtn = makeEl("button", { className: "channel-btn" + (state.currentChannel === "dms_home" ? " active" : ""), onClick: () => switchChannel("dms_home") });
   dmsBtn.appendChild(makeEl("span", { className: "channel-hash", text: "@" }));
   dmsBtn.appendChild(textNode("dms"));
@@ -266,8 +266,9 @@ function watchDMsList() {
   const handler = async (snap) => {
     const dms = snap.val() || {};
     clearChildren(el.dmsList);
-    el.dmsSidebarTitle.classList.toggle("hidden", Object.keys(dms).length === 0);
-    el.dmsList.classList.toggle("hidden", Object.keys(dms).length === 0);
+    const hasDms = Object.keys(dms).length > 0;
+    el.dmsSidebarTitle.classList.toggle("hidden", !hasDms);
+    el.dmsList.classList.toggle("hidden", !hasDms);
 
     for (const dmId of Object.keys(dms)) {
       const dmSnap = await get(ref(db, `dm_threads/${dmId}`));
@@ -310,6 +311,8 @@ function switchChannel(channel) {
   el.dmHeaderActions.classList.add("hidden");
   el.typingIndicator.classList.add("hidden");
   el.emptyChannelState.classList.add("hidden");
+  el.dmBlockBtn.classList.add("hidden");
+  el.dmLeaveBtn.classList.add("hidden");
 
   if (channel === "dms_home") {
     el.channelNameDisplay.textContent = "Direct Messages";
@@ -320,21 +323,18 @@ function switchChannel(channel) {
   } else if (channel.startsWith("dm_")) {
     get(ref(db, `dm_threads/${channel}`)).then(snap => {
       const data = snap.val();
-      if(!data) return;
-      const members = data.members || {};
-      const others = Object.keys(members).filter(u => u !== state.currentUid);
-      const isGroup = others.length > 1 || Object.keys(members).length > 2;
+      if (!data) return;
+      const others = Object.keys(data.members || {}).filter(u => u !== state.currentUid);
+      const isGroup = others.length > 1;
       el.channelNameDisplay.textContent = data.title || others.map(u => state.usersCache[u]?.username || u).join(", ");
       el.messageInput.placeholder = `Message ${el.channelNameDisplay.textContent}`;
       el.dmHeaderActions.classList.remove("hidden");
-      
-      // Update block/leave button based on whether it's a group or 1-on-1 dm
       if (isGroup) {
-        el.dmBlockBtn.textContent = "Leave Group";
-        el.dmBlockBtn.className = "btn btn-secondary";
+        el.dmBlockBtn.classList.add("hidden");
+        el.dmLeaveBtn.classList.remove("hidden");
       } else {
-        el.dmBlockBtn.textContent = "Block";
-        el.dmBlockBtn.className = "btn btn-danger";
+        el.dmBlockBtn.classList.remove("hidden");
+        el.dmLeaveBtn.classList.add("hidden");
       }
     });
     el.messagesScroll.classList.remove("hidden");
@@ -362,47 +362,17 @@ el.dmStartSearch.addEventListener("input", () => renderDMSearch(el.dmStartSearch
 async function renderDMSearch(query) {
   await loadAllUsersIfNeeded();
   clearChildren(el.dmStartResults);
-  
-  const myDmsSnap = await get(ref(db, `users/${state.currentUid}/dms`));
-  const myDms = myDmsSnap.val() || {};
-  
-  const matchingDms = [];
-  for (const dmId of Object.keys(myDms)) {
-    const threadSnap = await get(ref(db, `dm_threads/${dmId}`));
-    if (!threadSnap.exists()) continue;
-    const threadData = threadSnap.val();
-    const others = Object.keys(threadData.members || {}).filter(u => u !== state.currentUid);
-    const title = threadData.title || others.map(u => state.usersCache[u]?.username || u).join(", ");
-    if (!query || title.toLowerCase().includes(query)) {
-      matchingDms.push({ dmId, title, isGroup: others.length > 1 });
-    }
-  }
-
-  if (matchingDms.length > 0) {
-    const header = makeEl("div", { className: "sidebar-section-title", text: "Existing DMs" });
-    el.dmStartResults.appendChild(header);
-    for (const dm of matchingDms) {
-      const row = makeEl("div", { className: "search-result-item", onClick: () => switchChannel(dm.dmId) });
-      row.appendChild(makeEl("span", { text: `@ ${dm.title}` }));
-      el.dmStartResults.appendChild(row);
-    }
-  }
-
   const entries = Object.entries(state.usersCache)
     .filter(([uid]) => uid !== state.currentUid)
     .filter(([, rec]) => !query || rec.username.toLowerCase().includes(query) || (rec.displayName||"").toLowerCase().includes(query))
     .sort((a, b) => a[1].username.localeCompare(b[1].username));
     
-  if (entries.length > 0) {
-    const header = makeEl("div", { className: "sidebar-section-title", text: "Users" });
-    el.dmStartResults.appendChild(header);
-    for (const [uid, record] of entries) {
-      const row = makeEl("div", { className: "search-result-item", onClick: () => startDmWithUser(uid) });
-      const avatar = document.createElement("img"); avatar.className = "avatar"; avatar.src = safeAvatarSrc(record.profilePicture);
-      row.appendChild(avatar);
-      row.appendChild(makeEl("span", { text: `${record.displayName || record.username} (@${record.username})` }));
-      el.dmStartResults.appendChild(row);
-    }
+  for (const [uid, record] of entries) {
+    const row = makeEl("div", { className: "search-result-item", onClick: () => startDmWithUser(uid) });
+    const avatar = document.createElement("img"); avatar.className = "avatar"; avatar.src = safeAvatarSrc(record.profilePicture);
+    row.appendChild(avatar);
+    row.appendChild(makeEl("span", { text: `${record.displayName || record.username} (@${record.username})` }));
+    el.dmStartResults.appendChild(row);
   }
 }
 
@@ -464,25 +434,30 @@ async function addUserToCurrentDm(uid) {
 
 el.dmBlockBtn.addEventListener("click", async () => {
   const threadSnap = await get(ref(db, `dm_threads/${state.currentChannel}`));
-  const data = threadSnap.val() || {};
-  const members = data.members || {};
+  const members = threadSnap.val()?.members || {};
   const others = Object.keys(members).filter(u => u !== state.currentUid);
-  const isGroup = others.length > 1 || Object.keys(members).length > 2;
-
-  if (isGroup) {
-    // Leave group functionality
-    await remove(ref(db, `dm_threads/${state.currentChannel}/members/${state.currentUid}`));
-    await remove(ref(db, `users/${state.currentUid}/dms/${state.currentChannel}`));
-    showToast("Left group DM.", "success");
-    switchChannel("dms_home");
-  } else if (others.length === 1) {
-    // Block user functionality
+  if (others.length === 1) {
     const targetUid = others[0];
-    await update(ref(db, `users/${state.currentUid}/personalBlocks/${targetUid}`), true);
-    await remove(ref(db, `users/${state.currentUid}/dms/${state.currentChannel}`));
-    showToast("User blocked and DM removed.", "success");
+    const dmId = state.currentChannel;
+    await update(ref(db), {
+      [`users/${state.currentUid}/personalBlocks/${targetUid}`]: true,
+      [`users/${state.currentUid}/dms/${dmId}`]: null
+    });
+    showToast("User blocked. DM removed from your list.", "success");
     switchChannel("dms_home");
   }
+});
+
+el.dmLeaveBtn.addEventListener("click", async () => {
+  const dmId = state.currentChannel;
+  askConfirm("Leave group?", "You will be removed from this group DM and it will disappear from your list.", async () => {
+    await update(ref(db), {
+      [`dm_threads/${dmId}/members/${state.currentUid}`]: null,
+      [`users/${state.currentUid}/dms/${dmId}`]: null
+    });
+    showToast("You left the group.", "success");
+    switchChannel("dms_home");
+  });
 });
 
 function attachMessageListener(path) {
