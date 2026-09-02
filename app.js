@@ -252,6 +252,13 @@ function renderChannelList() {
     btn.dataset.channel = channel;
     el.channelList.appendChild(btn);
   }
+  
+  // DMs Tab Pseudo-Channel located directly under staff chat channel
+  const dmsBtn = makeEl("button", { className: "channel-btn" + (state.currentChannel === "dms_home" ? " active" : ""), onClick: () => switchChannel("dms_home") });
+  dmsBtn.appendChild(makeEl("span", { className: "channel-hash", text: "@" }));
+  dmsBtn.appendChild(textNode("dms"));
+  dmsBtn.dataset.channel = "dms_home";
+  el.channelList.appendChild(dmsBtn);
 }
 
 function watchDMsList() {
@@ -269,7 +276,7 @@ function watchDMsList() {
       
       let title = data.title;
       if (!title) {
-        const others = Object.keys(data.members).filter(u => u !== state.currentUid);
+        const others = Object.keys(data.members || {}).filter(u => u !== state.currentUid);
         const names = others.map(u => state.usersCache[u]?.username || u);
         title = names.join(", ");
       }
@@ -296,8 +303,6 @@ function switchChannel(channel) {
   updateReplyPreviewUI();
   
   document.querySelectorAll(".channel-btn").forEach((btn) => btn.classList.toggle("active", btn.dataset.channel === channel));
-  const dmsTabBtn = $("dms-tab-btn");
-  if (dmsTabBtn) dmsTabBtn.classList.toggle("active", channel === "dms_home");
 
   el.dmHomeView.classList.add("hidden");
   el.messagesScroll.classList.remove("hidden");
@@ -316,13 +321,21 @@ function switchChannel(channel) {
     get(ref(db, `dm_threads/${channel}`)).then(snap => {
       const data = snap.val();
       if(!data) return;
-      const others = Object.keys(data.members).filter(u => u !== state.currentUid);
-      const isGroup = others.length > 1;
+      const members = data.members || {};
+      const others = Object.keys(members).filter(u => u !== state.currentUid);
+      const isGroup = others.length > 1 || Object.keys(members).length > 2;
       el.channelNameDisplay.textContent = data.title || others.map(u => state.usersCache[u]?.username || u).join(", ");
       el.messageInput.placeholder = `Message ${el.channelNameDisplay.textContent}`;
       el.dmHeaderActions.classList.remove("hidden");
-      el.dmBlockBtn.textContent = isGroup ? "Leave Group" : "Block";
-      el.dmAddUserBtn.classList.remove("hidden");
+      
+      // Update block/leave button based on whether it's a group or 1-on-1 dm
+      if (isGroup) {
+        el.dmBlockBtn.textContent = "Leave Group";
+        el.dmBlockBtn.className = "btn btn-secondary";
+      } else {
+        el.dmBlockBtn.textContent = "Block";
+        el.dmBlockBtn.className = "btn btn-danger";
+      }
     });
     el.messagesScroll.classList.remove("hidden");
     clearChildren(el.messagesList);
@@ -349,17 +362,47 @@ el.dmStartSearch.addEventListener("input", () => renderDMSearch(el.dmStartSearch
 async function renderDMSearch(query) {
   await loadAllUsersIfNeeded();
   clearChildren(el.dmStartResults);
+  
+  const myDmsSnap = await get(ref(db, `users/${state.currentUid}/dms`));
+  const myDms = myDmsSnap.val() || {};
+  
+  const matchingDms = [];
+  for (const dmId of Object.keys(myDms)) {
+    const threadSnap = await get(ref(db, `dm_threads/${dmId}`));
+    if (!threadSnap.exists()) continue;
+    const threadData = threadSnap.val();
+    const others = Object.keys(threadData.members || {}).filter(u => u !== state.currentUid);
+    const title = threadData.title || others.map(u => state.usersCache[u]?.username || u).join(", ");
+    if (!query || title.toLowerCase().includes(query)) {
+      matchingDms.push({ dmId, title, isGroup: others.length > 1 });
+    }
+  }
+
+  if (matchingDms.length > 0) {
+    const header = makeEl("div", { className: "sidebar-section-title", text: "Existing DMs" });
+    el.dmStartResults.appendChild(header);
+    for (const dm of matchingDms) {
+      const row = makeEl("div", { className: "search-result-item", onClick: () => switchChannel(dm.dmId) });
+      row.appendChild(makeEl("span", { text: `@ ${dm.title}` }));
+      el.dmStartResults.appendChild(row);
+    }
+  }
+
   const entries = Object.entries(state.usersCache)
     .filter(([uid]) => uid !== state.currentUid)
     .filter(([, rec]) => !query || rec.username.toLowerCase().includes(query) || (rec.displayName||"").toLowerCase().includes(query))
     .sort((a, b) => a[1].username.localeCompare(b[1].username));
     
-  for (const [uid, record] of entries) {
-    const row = makeEl("div", { className: "search-result-item", onClick: () => startDmWithUser(uid) });
-    const avatar = document.createElement("img"); avatar.className = "avatar"; avatar.src = safeAvatarSrc(record.profilePicture);
-    row.appendChild(avatar);
-    row.appendChild(makeEl("span", { text: `${record.displayName || record.username} (@${record.username})` }));
-    el.dmStartResults.appendChild(row);
+  if (entries.length > 0) {
+    const header = makeEl("div", { className: "sidebar-section-title", text: "Users" });
+    el.dmStartResults.appendChild(header);
+    for (const [uid, record] of entries) {
+      const row = makeEl("div", { className: "search-result-item", onClick: () => startDmWithUser(uid) });
+      const avatar = document.createElement("img"); avatar.className = "avatar"; avatar.src = safeAvatarSrc(record.profilePicture);
+      row.appendChild(avatar);
+      row.appendChild(makeEl("span", { text: `${record.displayName || record.username} (@${record.username})` }));
+      el.dmStartResults.appendChild(row);
+    }
   }
 }
 
@@ -421,27 +464,24 @@ async function addUserToCurrentDm(uid) {
 
 el.dmBlockBtn.addEventListener("click", async () => {
   const threadSnap = await get(ref(db, `dm_threads/${state.currentChannel}`));
-  const data = threadSnap.val();
-  if (!data) return;
+  const data = threadSnap.val() || {};
   const members = data.members || {};
   const others = Object.keys(members).filter(u => u !== state.currentUid);
-  const isGroup = others.length > 1;
+  const isGroup = others.length > 1 || Object.keys(members).length > 2;
 
   if (isGroup) {
-    askConfirm("Leave Group", "Are you sure you want to leave this group DM?", async () => {
-      await remove(ref(db, `users/${state.currentUid}/dms/${state.currentChannel}`));
-      await remove(ref(db, `dm_threads/${state.currentChannel}/members/${state.currentUid}`));
-      switchChannel("general");
-      showToast("Left group DM.", "success");
-    });
+    // Leave group functionality
+    await remove(ref(db, `dm_threads/${state.currentChannel}/members/${state.currentUid}`));
+    await remove(ref(db, `users/${state.currentUid}/dms/${state.currentChannel}`));
+    showToast("Left group DM.", "success");
+    switchChannel("dms_home");
   } else if (others.length === 1) {
+    // Block user functionality
     const targetUid = others[0];
-    askConfirm("Block User", "Are you sure you want to block this user and remove this DM?", async () => {
-      await update(ref(db, `users/${state.currentUid}/personalBlocks/${targetUid}`), true);
-      await remove(ref(db, `users/${state.currentUid}/dms/${state.currentChannel}`));
-      switchChannel("general");
-      showToast("User blocked and DM removed.", "success");
-    });
+    await update(ref(db, `users/${state.currentUid}/personalBlocks/${targetUid}`), true);
+    await remove(ref(db, `users/${state.currentUid}/dms/${state.currentChannel}`));
+    showToast("User blocked and DM removed.", "success");
+    switchChannel("dms_home");
   }
 });
 
