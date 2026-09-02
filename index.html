@@ -87,10 +87,6 @@
             <!-- Channels injected by app.js -->
           </nav>
 
-          <!-- DMs List within Sidebar -->
-          <div class="sidebar-section-title hidden" id="dms-sidebar-title">Direct Messages</div>
-          <nav class="channel-list hidden" id="dms-list"></nav>
-
           <div class="sidebar-spacer"></div>
 
           <!-- Bottom-left user panel -->
@@ -117,25 +113,28 @@
               <button id="mobile-sidebar-btn" class="icon-btn mobile-only" aria-label="Open sidebar">Menu</button>
               <span id="channel-name-display" class="channel-name">#general</span>
               
-              <!-- DM Actions (Block/Leave, Add User) -->
+              <!-- DM Actions (Block / Leave Group + Add People) -->
               <div id="dm-header-actions" class="hidden" style="display: flex; gap: 8px; margin-left: 10px;">
                 <button id="dm-block-btn" class="btn btn-danger" style="padding: 4px 10px; font-size: 12px;">Block</button>
+                <button id="dm-leave-btn" class="btn btn-danger hidden" style="padding: 4px 10px; font-size: 12px;">Leave Group</button>
                 <button id="dm-add-user-btn" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;">Add People</button>
               </div>
             </div>
             <div class="chat-header-right" id="staff-controls"></div>
           </header>
 
-          <!-- DM Home View (Search & Start DM) -->
-          <div id="dm-home-view" class="hidden" style="padding: 20px; flex: 1; overflow-y: auto;">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
-              <div>
-                <h2>Direct Messages</h2>
-                <p style="color: var(--text-muted); margin: 0;">Search for a user to start a DM or scroll to find someone.</p>
-              </div>
-              <div style="position: relative; width: 300px;">
-                <input type="text" id="dm-start-search" class="field-input" placeholder="Search direct messages..." />
+          <!-- DM Home View (Search + DM list side-by-side) -->
+          <div id="dm-home-view" class="hidden">
+            <h2>Direct Messages</h2>
+            <p style="color: var(--text-muted); margin-bottom: 15px;">Search for a user to start a DM or scroll to find someone.</p>
+            <div class="dm-home-layout">
+              <div class="dm-home-search-col">
+                <input type="text" id="dm-start-search" class="field-input" placeholder="Search username or display name..." />
                 <div id="dm-start-results" class="search-dropdown-results"></div>
+              </div>
+              <div class="dm-home-list-col">
+                <div class="sidebar-section-title" id="dms-sidebar-title">Your DMs</div>
+                <nav class="channel-list" id="dms-list"></nav>
               </div>
             </div>
           </div>
@@ -179,7 +178,6 @@
 
   <!-- ======================= MODALS ======================= -->
   <div id="modal-overlay" class="modal-overlay hidden">
-    
     <!-- Add to DM Modal -->
     <div id="modal-add-to-dm" class="modal glass hidden">
       <div class="modal-header">
