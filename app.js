@@ -76,6 +76,7 @@ const el = {
   modalBlockRequests: $("modal-block-requests"), blockRequestsList: $("block-requests-list"), blockRequestsEmpty: $("block-requests-empty"),
   modalConfirm: $("modal-confirm"), confirmTitle: $("confirm-title"), confirmMessage: $("confirm-message"), confirmActionBtn: $("confirm-action-btn"), modalAddToDm: $("modal-add-to-dm"),
   toastContainer: $("toast-container"),
+  avatarInput: $("avatar-input"),
 };
 
 function textNode(str) { return document.createTextNode(str == null ? "" : String(str)); }
@@ -320,7 +321,8 @@ function switchChannel(channel) {
     el.messageComposer.classList.add("hidden");
     el.dmHomeView.classList.remove("hidden");
     renderDMSearch("");
-  } else if (channel.startsWith("dm_")) {
+  } else if (!CHANNELS.includes(channel) && channel !== "dms_home") {
+    // This is a DM thread (Firebase push keys do not start with "dm_")
     get(ref(db, `dm_threads/${channel}`)).then(snap => {
       const data = snap.val();
       if (!data) return;
@@ -610,7 +612,7 @@ async function sendMessage() {
   if (text.length > MAX_MSG_LEN) return showToast(`Messages are limited to ${MAX_MSG_LEN} characters.`, "error");
   if (state.currentUser?.mutedUntil > Date.now()) return showToast("You're muted and can't send messages right now.", "error");
   
-  if (state.currentChannel.startsWith("dm_")) {
+  if (!CHANNELS.includes(state.currentChannel) && state.currentChannel !== "dms_home") {
     const threadSnap = await get(ref(db, `dm_threads/${state.currentChannel}`));
     const members = threadSnap.val()?.members || {};
     for (const uid of Object.keys(members)) {
@@ -623,7 +625,7 @@ async function sendMessage() {
 
   state.lastMessageTime = now;
   const user = state.currentUser;
-  const path = state.currentChannel.startsWith("dm_") ? `messages/${state.currentChannel}` : `messages/${state.currentChannel}`;
+  const path = `messages/${state.currentChannel}`;
   const msgRef = push(ref(db, path));
 
   const payload = {
@@ -670,7 +672,7 @@ function startEdit(msgId, msg, rowEl) {
     if (save) {
       const newText = textarea.value.trim();
       if (!newText || newText.length > MAX_MSG_LEN) return showToast("Invalid edit.", "error");
-      const path = state.currentChannel.startsWith("dm_") ? `messages/${state.currentChannel}/${msgId}` : `messages/${state.currentChannel}/${msgId}`;
+      const path = `messages/${state.currentChannel}/${msgId}`;
       await update(ref(db, path), { text: newText, edited: true });
     }
   };
@@ -679,7 +681,7 @@ function startEdit(msgId, msg, rowEl) {
 
 function confirmDeleteMessage(msgId) {
   askConfirm("Delete message?", "This can't be undone.", async () => {
-    const path = state.currentChannel.startsWith("dm_") ? `messages/${state.currentChannel}/${msgId}` : `messages/${state.currentChannel}/${msgId}`;
+    const path = `messages/${state.currentChannel}/${msgId}`;
     await remove(ref(db, path));
   });
 }
@@ -704,12 +706,201 @@ el.profileBtn.addEventListener("click", () => { const user = state.currentUser; 
 el.profileSaveBtn.addEventListener("click", async () => { const dn = el.profileDisplayName.value.trim(), bio = el.profileBio.value.trim(); if (dn.length > MAX_DISPLAY_NAME_LEN || bio.length > MAX_BIO_LEN) return; await update(ref(db, `users/${state.currentUid}`), { displayName: dn, bio }); state.currentUser.displayName = dn; state.currentUser.bio = bio; renderUserPanel(); closeModals(); showToast("Profile updated.", "success"); });
 async function openUserProfileById(uid) { if (!uid) return; let record = state.usersCache[uid]; if (!record) { const snap = await get(ref(db, `users/${uid}`)); if (!snap.exists()) return; record = snap.val(); state.usersCache[uid] = record; } el.vpAvatar.src = safeAvatarSrc(record.profilePicture); el.vpDisplayName.textContent = record.displayName || record.username; el.vpUsername.textContent = `@${record.username}`; el.vpRole.textContent = record.role !== "user" ? record.role.toUpperCase() : ""; el.vpBio.textContent = record.bio || ""; openModal("modalViewProfile"); }
 
+// Profile picture upload
+el.userPanelAvatarBtn.addEventListener("click", () => el.avatarInput.click());
+el.avatarInput.addEventListener("change", async () => {
+  const file = el.avatarInput.files[0];
+  el.avatarInput.value = "";
+  if (!file || !file.type.startsWith("image/")) return showToast("Please select an image file.", "error");
+  try {
+    const dataUrl = await resizeImageToDataUrl(file, MAX_AVATAR_DIMENSION);
+    await update(ref(db, `users/${state.currentUid}`), { profilePicture: dataUrl });
+    state.currentUser.profilePicture = dataUrl;
+    renderUserPanel();
+    showToast("Profile picture updated.", "success");
+  } catch (e) {
+    showToast("Failed to update profile picture.", "error");
+  }
+});
+
+function resizeImageToDataUrl(file, maxDim) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.width, h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+        else { w = Math.round(w * maxDim / h); h = maxDim; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Image load failed")); };
+    img.src = url;
+  });
+}
+
 function watchOwnBlockStatus(uid) { const r = ref(db, `users/${uid}/blocked`); const handler = (snap) => { if (snap.val()) { teardownAllListeners(); watchOwnBlockStatus(uid); showBlockedScreen(); } else if (state.currentUser && !el.blockedScreen.classList.contains("hidden")) { get(ref(db, `users/${uid}`)).then(s => s.exists() && enterApp(uid, s.val())); } }; onValue(r, handler); state.userListeners.push(() => off(r, "value", handler)); }
 function watchOwnMuteStatus(uid) { const r = ref(db, `users/${uid}/mutedUntil`); const handler = (snap) => { state.currentUser.mutedUntil = snap.val() || 0; updateMuteUI(); }; onValue(r, handler); state.userListeners.push(() => off(r, "value", handler)); if(state.muteTimer) clearInterval(state.muteTimer); state.muteTimer = setInterval(updateMuteUI, 1000); }
 function updateMuteUI() { const muted = state.currentUser?.mutedUntil > Date.now(); el.muteNotice.classList.toggle("hidden", !muted); el.sendBtn.disabled = muted; el.messageInput.disabled = muted; if (muted) el.muteRemaining.textContent = ` (${Math.ceil((state.currentUser.mutedUntil - Date.now()) / 1000)}s)`; }
 function watchOwnRoleChanges(uid) { const r = ref(db, `users/${uid}/role`); const handler = (snap) => { const newRole = snap.val(); if (!newRole || newRole === state.currentUser.role) return; state.currentUser.role = newRole; renderUserPanel(); renderChannelList(); setupStaffControls(); if (state.currentChannel === "staff" && !STAFF_ROLES.includes(newRole)) switchChannel("general"); showToast(`Your role is now ${newRole}.`, "info"); }; onValue(r, handler); state.userListeners.push(() => off(r, "value", handler)); }
 
 function setupStaffControls() { clearChildren(el.staffControls); if (!STAFF_ROLES.includes(state.currentUser.role)) return; const btn = makeEl("button", { className: "icon-btn", text: "Staff", onClick: () => { el.staffBroadcastBtn.classList.toggle("hidden", !["owner","admin"].includes(state.currentUser.role)); el.staffUsermanagerBtn.classList.toggle("hidden", !STAFF_ROLES.includes(state.currentUser.role)); el.staffBlockrequestsBtn.classList.toggle("hidden", !["owner","admin"].includes(state.currentUser.role)); openModal("modalStaffMenu"); } }); el.staffControls.appendChild(btn); }
+
+// Staff menu button listeners
+el.staffBroadcastBtn.addEventListener("click", () => {
+  el.broadcastMessage.value = "";
+  el.broadcastDuration.value = "8";
+  el.broadcastCounter.textContent = "0/300";
+  el.broadcastError.classList.add("hidden");
+  openModal("modalBroadcast");
+});
+el.staffUsermanagerBtn.addEventListener("click", () => {
+  el.userSearchInput.value = "";
+  clearChildren(el.userSearchResults);
+  openModal("modalUsermanager");
+  renderUserSearchResults("");
+});
+el.staffBlockrequestsBtn.addEventListener("click", () => {
+  openModal("modalBlockRequests");
+  loadBlockRequests();
+});
+
+// Broadcast
+el.broadcastMessage.addEventListener("input", () => {
+  el.broadcastCounter.textContent = `${el.broadcastMessage.value.length}/300`;
+});
+el.broadcastSendBtn.addEventListener("click", async () => {
+  const msg = el.broadcastMessage.value.trim();
+  const dur = parseInt(el.broadcastDuration.value, 10);
+  if (!msg) return showToast("Message required.", "error");
+  if (msg.length > MAX_BROADCAST_LEN) return showToast("Message too long.", "error");
+  if (isNaN(dur) || dur < MIN_BROADCAST_SEC || dur > MAX_BROADCAST_SEC) return showToast("Duration must be 3-20 seconds.", "error");
+  const expiresAt = Date.now() + dur * 1000;
+  await set(ref(db, "broadcast/current"), { message: msg, expiresAt, sentBy: state.currentUid, sentAt: Date.now() });
+  closeModals();
+  showToast("Broadcast sent.", "success");
+});
+
+// User Manager search
+el.userSearchInput.addEventListener("input", () => renderUserSearchResults(el.userSearchInput.value.trim().toLowerCase()));
+async function renderUserSearchResults(query) {
+  await loadAllUsersIfNeeded();
+  clearChildren(el.userSearchResults);
+  const entries = Object.entries(state.usersCache)
+    .filter(([, rec]) => !query || rec.username.toLowerCase().includes(query) || (rec.displayName || "").toLowerCase().includes(query))
+    .sort((a, b) => a[1].username.localeCompare(b[1].username));
+  for (const [uid, record] of entries) {
+    const row = makeEl("div", { className: "user-result-row", onClick: () => openManageUser(uid) });
+    const avatar = document.createElement("img"); avatar.className = "avatar"; avatar.src = safeAvatarSrc(record.profilePicture);
+    row.appendChild(avatar);
+    const info = makeEl("div", { className: "user-result-info" });
+    info.appendChild(makeEl("div", { className: "user-result-name", text: record.displayName || record.username }));
+    info.appendChild(makeEl("div", { className: "user-result-sub", text: `@${record.username} · ${record.role}` }));
+    row.appendChild(info);
+    el.userSearchResults.appendChild(row);
+  }
+}
+
+async function openManageUser(uid) {
+  state.activeManagedUid = uid;
+  let record = state.usersCache[uid];
+  if (!record) {
+    const snap = await get(ref(db, `users/${uid}`));
+    if (!snap.exists()) return;
+    record = snap.val();
+    state.usersCache[uid] = record;
+  }
+  el.muAvatar.src = safeAvatarSrc(record.profilePicture);
+  el.muDisplayName.textContent = record.displayName || record.username;
+  el.muUsername.textContent = `@${record.username}`;
+  clearChildren(el.muActions);
+
+  const myRole = state.currentUser.role;
+  const targetRole = record.role;
+
+  // Mute
+  if (["owner", "admin", "helper"].includes(myRole)) {
+    const muteBtn = makeEl("button", { className: "btn btn-secondary btn-block", text: "Mute (60s)", onClick: async () => {
+      await update(ref(db, `users/${uid}`), { mutedUntil: Date.now() + 60000 });
+      showToast("User muted for 60 seconds.", "success");
+      closeModals();
+    }});
+    el.muActions.appendChild(muteBtn);
+  }
+
+  // Block / Unblock (owner/admin only)
+  if (["owner", "admin"].includes(myRole)) {
+    if (record.blocked) {
+      const unblockBtn = makeEl("button", { className: "btn btn-secondary btn-block", text: "Unblock", onClick: async () => {
+        await update(ref(db, `users/${uid}`), { blocked: false });
+        showToast("User unblocked.", "success");
+        closeModals();
+      }});
+      el.muActions.appendChild(unblockBtn);
+    } else {
+      const blockBtn = makeEl("button", { className: "btn btn-danger btn-block", text: "Block", onClick: async () => {
+        await update(ref(db, `users/${uid}`), { blocked: true });
+        showToast("User blocked.", "success");
+        closeModals();
+      }});
+      el.muActions.appendChild(blockBtn);
+    }
+  }
+
+  // Role changes (owner only)
+  if (myRole === "owner" && uid !== state.currentUid) {
+    for (const role of ["user", "helper", "admin"]) {
+      if (role === targetRole) continue;
+      const roleBtn = makeEl("button", { className: "btn btn-secondary btn-block", text: `Set role: ${role}`, onClick: async () => {
+        await update(ref(db, `users/${uid}`), { role });
+        showToast(`Role set to ${role}.`, "success");
+        closeModals();
+      }});
+      el.muActions.appendChild(roleBtn);
+    }
+  }
+
+  openModal("modalManageUser");
+}
+
+// Block Requests
+async function loadBlockRequests() {
+  clearChildren(el.blockRequestsList);
+  const snap = await get(ref(db, "blockRequests"));
+  const data = snap.val() || {};
+  const keys = Object.keys(data);
+  el.blockRequestsEmpty.classList.toggle("hidden", keys.length > 0);
+  for (const reqId of keys) {
+    const req = data[reqId];
+    const card = makeEl("div", { className: "block-request-card" });
+    card.appendChild(makeEl("div", { className: "br-target", text: `Target: ${req.targetUsername || req.targetUid}` }));
+    card.appendChild(makeEl("div", { text: `Reason: ${req.reason || "—"}` }));
+    card.appendChild(makeEl("div", { text: `Requested by: ${req.requesterUsername || req.requesterUid}` }));
+    const actions = makeEl("div", { className: "mu-actions", attrs: { style: "margin-top:8px;" } });
+    const approve = makeEl("button", { className: "btn btn-danger", text: "Approve & Block", onClick: async () => {
+      await update(ref(db, `users/${req.targetUid}`), { blocked: true });
+      await remove(ref(db, `blockRequests/${reqId}`));
+      showToast("User blocked.", "success");
+      loadBlockRequests();
+    }});
+    const deny = makeEl("button", { className: "btn btn-secondary", text: "Deny", onClick: async () => {
+      await remove(ref(db, `blockRequests/${reqId}`));
+      showToast("Request denied.", "info");
+      loadBlockRequests();
+    }});
+    actions.appendChild(approve);
+    actions.appendChild(deny);
+    card.appendChild(actions);
+    el.blockRequestsList.appendChild(card);
+  }
+}
+
 function watchBroadcast() { const r = ref(db, "broadcast/current"); const handler = (snap) => { const data = snap.val(); if (state.broadcastTimer) clearTimeout(state.broadcastTimer); if (!data || data.expiresAt <= Date.now()) return el.broadcastBanner.classList.add("hidden"); el.broadcastText.textContent = data.message; el.broadcastBanner.classList.remove("hidden"); state.broadcastTimer = setTimeout(() => el.broadcastBanner.classList.add("hidden"), data.expiresAt - Date.now()); }; onValue(r, handler); state.userListeners.push(() => off(r, "value", handler)); }
 function watchBlockRequestsDot() { const r = ref(db, "blockRequests"); const handler = (snap) => { el.blockRequestsDot.classList.toggle("hidden", !(snap.exists() && Object.keys(snap.val()||{}).length > 0 && ["owner","admin"].includes(state.currentUser.role))); }; onValue(r, handler); state.userListeners.push(() => off(r, "value", handler)); }
 
